@@ -1,18 +1,21 @@
-import "./env.js";
-import cors from "cors";
-import express from "express";
+import { buildApp } from "./app.js";
 import { pool } from "./db.js";
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-app.get("/health", async (_req, res) => {
-  await pool.query("select 1");
-  res.json({ ok: true });
-});
+const app = buildApp();
+app.addHook("onClose", async () => { await pool.end(); });
 
 // TODO (candidate): import data on startup + /capital endpoints (see README)
 
 const port = Number(process.env.PORT ?? 3001);
-app.listen(port, () => console.log(`API on http://localhost:${port}`));
+try {
+  await app.listen({ port, host: "0.0.0.0" });
+  console.log(`API on http://localhost:${port}`);
+} catch (error) {
+  console.error(error);
+  await app.close();
+  process.exitCode = 1;
+}
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => { void app.close(); });
+}

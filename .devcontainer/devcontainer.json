@@ -3,7 +3,7 @@
   "dockerComposeFile": "docker-compose.yml",
   "service": "app",
   "workspaceFolder": "/workspace",
-  "postCreateCommand": "npm install",
+  "postCreateCommand": "bash -lc '. \"$NVM_DIR/nvm.sh\" && nvm install && nvm alias default 24.22.1 && npm install --global npm@11.19.1 && npm ci'",
   "forwardPorts": [5173, 3001, 5432],
   "portsAttributes": { "5173": { "label": "frontend", "onAutoForward": "openBrowser" } },
   "secrets": {
