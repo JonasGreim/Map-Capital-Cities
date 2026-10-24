@@ -42,14 +42,16 @@ npm run lint           # ESLint flat config, TypeScript, React and React Hooks r
 npm run typecheck      # both workspaces, including backend tests
 npm run build          # backend TypeScript + frontend Vite production build
 npm run check          # lint + typecheck + build
-npm test               # Fastify inject tests: health success, DB failure and CORS
+npm test               # mocked importer/readiness tests and Fastify health/CORS tests
 git diff --check
 ```
 
-CI runs `npm ci`, `npm run check` and the health tests on PRs and main pushes,
-using the pinned runtime without secrets or a database. The health tests inject a
-fake DB; verify the real connection separately with `curl -i http://localhost:3001/health`
-after starting PostgreSQL and the API. App construction (`buildApp` in
+CI runs `npm ci`, `npm run check` and `npm test` on PRs and main pushes,
+using the pinned runtime without secrets or a database. Import tests mock REST
+Countries; the health tests inject a fake DB. The optional PostgreSQL suite skips
+unless `TEST_DATABASE_URL` is explicitly set (see below). Verify the real running
+API separately with `curl -i http://localhost:3001/health` after startup completes.
+App construction (`buildApp` in
 `backend/src/app.ts`) does not start a listener.
 
 `npm audit` still reports Vite 5 (high) and its esbuild dependency (moderate).
@@ -66,10 +68,39 @@ required for the static checks above.
 ## Data
 
 ```json
-{ "id": "...", "name": "string", "latitude": 0.0, "longitude": 0.0, "country": "string" }
+{ "id": 1, "name": "string", "latitude": 0.0, "longitude": 0.0, "country": "string" }
 ```
 
-`name` and `country` are unique. Provide `db/schema.sql`; it must run automatically the first time the database starts.
+`db/schema.sql` creates `capitals` with an automatically generated integer ID,
+non-null/nonblank names and countries, latitude in [-90, 90] and longitude in
+[-180, 180]. Capital names are unique case-insensitively (`lower(name)` index);
+countries have an exact unique constraint.
+
+Both Compose configurations mount this SQL file read-only into PostgreSQL's
+`/docker-entrypoint-initdb.d/`. It runs automatically **only when the database
+storage is first initialized**. Existing `pgdata` volumes and rows are preserved;
+Docker does not rerun init scripts on them. For an existing starter database,
+apply the schema once without resetting its volume:
+
+```bash
+docker compose exec -T db psql -U postgres -d capitals -v ON_ERROR_STOP=1 < db/schema.sql
+# In a devcontainer, use: docker compose -f .devcontainer/docker-compose.yml exec ...
+```
+
+The script can be reapplied to this schema. It is not a migration framework and
+does not repair an incompatible, manually created `capitals` table.
+
+For real PostgreSQL checks, point the opt-in suite at a **disposable test database**:
+
+```bash
+TEST_DATABASE_URL=postgres://postgres:postgres@localhost:55432/capitals npm test
+```
+
+The suite creates a uniquely named schema, tests constraints, multi-page import,
+repeat imports, local edits, deletion/reimport, rollback and DB-backed health,
+then removes only that test schema. It never uses `DATABASE_URL` as a fallback.
+REST Countries is still mocked; no real API key is needed. Real startup with a
+valid key should log import counts before the API begins listening.
 
 ## Backend
 
@@ -80,6 +111,43 @@ On startup, import countries and capitals from [REST Countries](https://restcoun
 GET https://api.restcountries.com/countries/v5
 Authorization: Bearer <RESTCOUNTRIES_API_KEY>
 ```
+
+`backend/src/import-capitals.ts` is independent of the server bootstrap. Startup
+first checks PostgreSQL readiness (up to 10 attempts, 1 second between failures;
+connections time out after 2 seconds and queries after 5 seconds), then imports,
+then listens on port 3001. A missing key, unavailable DB, failed import or missing
+schema aborts startup with a visible error and nonzero exit status. The root
+`.env` is loaded before creating the pool; the API key remains server-side.
+
+The importer requests `limit=100` and advances `offset` by the returned count.
+It maps `data.objects`: `names.common` → country, `capitals[0].name` → name and
+`capitals[0].coordinates.lat/lng` → coordinates. Text is trimmed; missing/blank
+names, missing first capitals, nonnumeric/nonfinite or out-of-range coordinates
+are skipped. Additional capitals are ignored as required by the assignment.
+
+Pagination follows and validates `data.meta.total/count/limit/offset/more` from
+the [v5 documentation](https://restcountries.com/docs/countries#pagination).
+Without metadata it continues full pages until a short/empty page. Contradictory
+metadata, stalled/repeated pages, changing totals, demo responses, invalid JSON
+or envelopes, HTTP errors and network failures fail the import. Each request has
+a 15-second timeout; a 100-page safety cap prevents an endless import. Failed
+requests are not automatically retried; fix the error and restart the backend.
+
+All pages are fetched and validated before opening a transaction. Parameterized
+inserts use `ON CONFLICT DO NOTHING`; one transaction commits all valid records
+or rolls back on a database error. A failed later API page causes no DB writes.
+Success logs include pages, fetched records, skipped invalid records, conflicts
+(`skippedExisting`, including duplicates within the API result) and inserted
+records. Failure logs include the failing stage/offset and progress counts;
+uncommitted inserts are never reported as imported.
+
+**Initial import policy:** every backend start imports again, without updating
+existing records or writing a persistent completion marker. Records conflicting
+with either unique constraint retain their local values. **Deleting an imported
+capital may cause it to reappear after a backend restart.** Changing both its name
+and country can likewise allow the original to be inserted again, because neither
+unique key then matches. A future seed-once policy can wrap the importer without
+changing its fetching/transformation logic; no reset button is included here.
 
 Endpoints:
 
