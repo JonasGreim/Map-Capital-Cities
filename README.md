@@ -271,13 +271,35 @@ On desktop the list scrolls beside a map that fills the remaining space. At
 full-width map. Mapbox initializes independently of capital data; a resize
 observer keeps its canvas sized to its panel and is disconnected along with the
 map on unmount. A missing Mapbox token shows setup guidance while the list still
-works. Capital markers, popups and frontend editing are reserved for later issues.
+works.
+
+Each valid capital in the shared store has a square **32 × 32 CSS pixel** marker
+at its longitude/latitude. Click a marker, or focus it with Tab and press Enter
+or Space, to open its capital/country popup. Choose Teal, Red, Purple or Gold in
+the labeled “Marker color” select to update only that marker immediately. The
+selected color also has a text name. Escape or the close button closes the popup
+and returns keyboard focus to its marker; clicking the map also closes it.
+
+Colors are in-memory frontend state keyed by capital ID. They survive popup
+reopening, React rerenders and capital reloads while the map is mounted. Removed
+capitals release their markers and colors; new capitals start Teal. A page reload
+or map unmount resets colors. Nothing is saved to PostgreSQL or localStorage.
+The map stays mounted during data changes, preserving the current view. Markers,
+popups, event listeners and the resize observer are cleaned up on unmount.
+
+Markers can overlap at world zoom levels; zoom in to distinguish nearby capitals,
+or use keyboard focus to access overlapping markers. No clustering or positional
+offsets are applied. Mapbox's globe projection can hide capitals on the far side;
+drag the map to reach them. Map tiles require a working Mapbox token and network.
+Frontend CRUD remains reserved for #6.
 
 ### Frontend verification
 
 `npm test -w frontend` covers the API contract and failures, request sharing,
-loading/error transitions, retry/reload and the rendered list states. These unit
-tests mock fetch; they do not establish database or browser integration.
+loading/error transitions, retry/reload and the rendered list states. Marker tests
+use small DOM/Mapbox doubles to cover coordinates, square CSS dimensions, popup
+context, independent colors, reopening, data updates, removal and cleanup. These
+unit tests do not establish database, native keyboard or browser integration.
 
 For a real browser check after backend startup:
 
@@ -290,7 +312,12 @@ For a real browser check after backend startup:
    fulfill it with `[]` for empty, or return HTTP 503 for error. Remove the error
    interception, focus “Try again” and press Enter: real records should return
    without replacing the map canvas. Do not delete development data to test empty.
-4. Inspect browser console errors. An intentionally mocked HTTP failure is
+4. Open different marker popups (mouse and keyboard), change their colors, close
+   and reopen them. Check independent colors, 32×32 square dimensions, focus and
+   Escape. Reload capital data through the store and check unchanged markers,
+   colors, canvas and map view. Verify zoom/drag, nearby capitals and narrow-screen
+   popups. A full page reload should reset colors.
+5. Inspect browser console errors. An intentionally mocked HTTP failure is
    expected during the error check; normal loading should have no errors.
 
 The isolated browser MCP tools configured in `.codex/config.toml` can run these
