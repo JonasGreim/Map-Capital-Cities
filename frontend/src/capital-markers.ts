@@ -16,7 +16,7 @@ type Entry = {
   popup?: mapboxgl.Popup;
   heading?: HTMLHeadingElement;
   country?: HTMLParagraphElement;
-  disposePopup?: () => void;
+  disposePopup?: (returnFocus?: boolean) => void;
   open: (event: Event) => void;
 };
 
@@ -63,6 +63,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl) {
       event.stopPropagation();
       popup.remove();
     };
+    let returnFocus = true;
     const onClose = () => {
       // Mapbox detaches the dialog before emitting close, which can move focus
       // to body. Respect focus already moved to another control or the canvas.
@@ -76,14 +77,14 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl) {
       entry.disposePopup = undefined;
       entry.button.setAttribute("aria-expanded", "false");
       if (active === entry) active = undefined;
-      if (restoreFocus && entry.button.isConnected) entry.button.focus({ preventScroll: true });
+      if (returnFocus && restoreFocus && entry.button.isConnected) entry.button.focus({ preventScroll: true });
     };
     select.addEventListener("change", change);
     popup.on("close", onClose);
     entry.popup = popup;
     entry.heading = heading;
     entry.country = country;
-    entry.disposePopup = () => { popup.remove(); };
+    entry.disposePopup = (restoreFocus = true) => { returnFocus = restoreFocus; popup.remove(); };
     active = entry;
     popup.addTo(map);
     const dialog = popup.getElement();
@@ -94,10 +95,13 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl) {
     select.focus({ preventScroll: true });
   }
 
-  function remove(entry: Entry) {
-    close(entry);
+  function remove(entry: Entry, focusCanvas = true) {
+    // Check before Mapbox detaches the popup and moves its focus to body.
+    const focusInsidePopup = entry.popup?.getElement()?.contains(document.activeElement);
+    entry.disposePopup?.(false);
     entry.button.removeEventListener("click", entry.open);
     entry.marker.remove();
+    if (focusCanvas && focusInsidePopup) map.getCanvas().focus({ preventScroll: true });
   }
 
   return {
@@ -146,7 +150,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl) {
       }
     },
     destroy() {
-      for (const entry of entries.values()) remove(entry);
+      for (const entry of entries.values()) remove(entry, false);
       entries.clear();
     },
   };

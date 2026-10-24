@@ -18,11 +18,12 @@ class Element extends EventTarget {
   value = "";
   type = "";
   isConnected = true;
+  focusCount = 0;
   constructor(public tag: string) { super(); }
   append(...children: Element[]) { this.children.push(...children); }
   setAttribute(name: string, value: string) { this.attributes.set(name, value); }
   contains(element: unknown): boolean { return this === element || this.children.some((child) => child.contains(element)); }
-  focus() { dom.activeElement = this; }
+  focus() { this.focusCount += 1; dom.activeElement = this; }
   click() { this.dispatchEvent(new Event("click")); }
 }
 const dom = { createElement: (tag: string) => new Element(tag), activeElement: null as Element | null, body: new Element("body") };
@@ -63,13 +64,14 @@ function setup(t: TestContext) {
       return this;
     }
   }
-  const controller = createCapitalMarkers({} as mapboxgl.Map, { Marker, Popup } as unknown as typeof mapboxgl);
+  const canvas = new Element("canvas");
+  const controller = createCapitalMarkers({ getCanvas: () => canvas } as unknown as mapboxgl.Map, { Marker, Popup } as unknown as typeof mapboxgl);
   t.after(() => {
     controller.destroy();
     if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
     else Reflect.deleteProperty(globalThis, "document");
   });
-  return { controller, markers, popups };
+  return { controller, markers, popups, canvas };
 }
 
 function choose(popup: { content?: Element }, value: string) {
@@ -150,6 +152,66 @@ test("opening another marker closes the previous popup; Escape restores marker f
   assert.equal(popups[1].removed, true);
   assert.equal(dom.activeElement, markers[1].options.element);
   assert.equal(markers[1].options.element.attributes.get("aria-expanded"), "false");
+});
+
+test("removing an active capital moves popup focus to the canvas without focusing the removed marker", (t) => {
+  const { controller, markers, popups, canvas } = setup(t);
+  controller.update([berlin, paris]);
+  const button = markers[0].options.element;
+  button.click();
+  const select = choose(popups[0], markerColors[1].value);
+  controller.update([paris]);
+  assert.equal(button.focusCount, 0);
+  assert.equal(dom.activeElement, canvas);
+  assert.equal(canvas.focusCount, 1);
+  assert.equal(markers[0].removed, true);
+  assert.equal(markers[1].removed, false);
+  assert.equal(popups[0].removed, true);
+  assert.equal(popups[0].closeListeners.size, 0);
+  assert.equal(button.attributes.get("aria-expanded"), "false");
+  select.value = markerColors[2].value;
+  select.dispatchEvent(new Event("change"));
+  assert.equal(button.style.backgroundColor, markerColors[1].value);
+  button.click();
+  assert.equal(popups.length, 1);
+  markers[1].options.element.click();
+  assert.equal(popups.length, 2);
+});
+
+test("removing a popup whose focus already moved elsewhere does not steal focus", (t) => {
+  const { controller, markers, canvas } = setup(t);
+  controller.update([berlin, paris]);
+  const elsewhere = new Element("button");
+  let berlinMarker = markers[0];
+  for (const target of [elsewhere, markers[1].options.element, canvas, dom.body]) {
+    berlinMarker.options.element.click();
+    target.focus();
+    const previousCanvasFocusCount = canvas.focusCount;
+    controller.update([paris]);
+    assert.equal(dom.activeElement, target);
+    assert.equal(canvas.focusCount, previousCanvasFocusCount);
+    assert.equal(berlinMarker.options.element.focusCount, 0);
+    controller.update([berlin, paris]);
+    // Re-added Berlin becomes the last marker in the mock registry.
+    berlinMarker = markers.at(-1)!;
+  }
+});
+
+test("normal popup closure respects focus elsewhere and unmount does not focus the outgoing canvas", (t) => {
+  const { controller, markers, popups, canvas } = setup(t);
+  controller.update([berlin]);
+  markers[0].options.element.click();
+  const elsewhere = new Element("button");
+  elsewhere.focus();
+  popups[0].remove();
+  assert.equal(dom.activeElement, elsewhere);
+  assert.equal(markers[0].options.element.focusCount, 0);
+  markers[0].options.element.click();
+  controller.destroy();
+  assert.equal(markers[0].options.element.focusCount, 0);
+  assert.equal(canvas.focusCount, 0);
+  assert.equal(markers[0].removed, true);
+  assert.equal(popups[1].closeListeners.size, 0);
 });
 
 test("removed capitals release markers, popups, listeners and colors; new capitals get default colors", (t) => {
