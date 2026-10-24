@@ -42,13 +42,13 @@ npm run lint           # ESLint flat config, TypeScript, React and React Hooks r
 npm run typecheck      # both workspaces, including backend tests
 npm run build          # backend TypeScript + frontend Vite production build
 npm run check          # lint + typecheck + build
-npm test               # mocked importer/readiness tests and Fastify health/CORS tests
+npm test               # mocked importer/readiness and Fastify CRUD/health/CORS tests
 git diff --check
 ```
 
 CI runs `npm ci`, `npm run check` and `npm test` on PRs and main pushes,
 using the pinned runtime without secrets or a database. Import tests mock REST
-Countries; the health tests inject a fake DB. The optional PostgreSQL suite skips
+Countries; API tests inject a fake DB. The optional PostgreSQL suite skips
 unless `TEST_DATABASE_URL` is explicitly set (see below). Verify the real running
 API separately with `curl -i http://localhost:3001/health` after startup completes.
 App construction (`buildApp` in
@@ -111,7 +111,7 @@ only that test container when the subshell exits, including when tests fail.
 It does not mount or modify the normal development database or its volumes.
 The integration suite uses `TEST_DATABASE_URL`, waits for PostgreSQL readiness,
 creates a uniquely named temporary schema, tests constraints, multi-page import,
-repeat imports, local edits, deletion/reimport, rollback and DB-backed health,
+repeat imports, local edits, deletion/reimport, rollback, CRUD HTTP requests and DB-backed health,
 then removes only that test schema. It never falls back to `DATABASE_URL` and
 skips these integration checks when `TEST_DATABASE_URL` is unset. REST Countries
 is still mocked; no real API key is needed. Real startup with a valid key should
@@ -167,15 +167,72 @@ request aborts startup before the API begins listening. These are limitations of
 the agreed startup-import policy; no persistent completion marker or reset button
 is implemented.
 
-Endpoints:
+### Capital API
 
+All capital objects have the shape shown in the Data section. The API uses JSON;
+POST and PUT require `Content-Type: application/json`.
+
+| Method | Path | Success response |
+| --- | --- | --- |
+| GET | `/capital` | 200, a plain array of all capitals (`[]` when empty), ordered by case-insensitive name then ID |
+| GET | `/capital/:name` | 200, one capital matched by case-insensitive name; URL-encode the name |
+| POST | `/capital` | 201, the created capital with its generated integer ID |
+| PUT | `/capital/:id` | 200, the fully updated capital with the same ID |
+| DELETE | `/capital/:id` | 204, no response body |
+
+POST and PUT both require exactly `name`, `latitude`, `longitude` and `country`.
+Names and countries must be nonblank strings without NUL characters; surrounding
+whitespace is trimmed before storage. Coordinates must be JSON numbers (numeric
+strings are rejected), with latitude in [-90, 90] and longitude in [-180, 180].
+Unknown fields, including a body `id`, are rejected. PUT replaces all four editable
+fields; it does not accept partial updates. IDs must be decimal integers from 1
+through 2147483647 without leading zeros. Name uniqueness is case-insensitive;
+country uniqueness uses the exact stored text.
+
+Errors from these routes have the shape `{"error":"message"}`:
+
+| Status | Meaning | Example message |
+| --- | --- | --- |
+| 400 | Invalid body, coordinates, name or ID; malformed JSON | `Invalid request data` |
+| 404 | Capital name or ID does not exist | `Capital not found` |
+| 409 | Capital name or country conflicts with an existing record | `Capital name or country already exists` |
+| 415 | Unsupported request content type | `Content-Type must be application/json` |
+| 500 | Unexpected database/server failure | `Internal server error` |
+
+SQL errors, stack traces and credentials are never returned by the capital routes.
+`/health` keeps its existing database-backed behavior.
+
+For manual checks, first follow Run the starter (`npm run db`, then `npm run dev`),
+or run only the API with `npm run dev -w backend`. Startup still needs the schema,
+PostgreSQL and a valid REST Countries key. After the startup import completes:
+
+```bash
+curl -s http://localhost:3001/capital
+# Example response: [{"id":1,"name":"Berlin","latitude":52.52,"longitude":13.405,"country":"Germany"}, ...]
+curl -s http://localhost:3001/capital/bErLiN
+# Example response: {"id":1,"name":"Berlin","latitude":52.52,"longitude":13.405,"country":"Germany"}
+
+curl -i -X POST http://localhost:3001/capital \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Example City","latitude":10,"longitude":20,"country":"Example Country"}'
+# 201: {"id":<generated-id>,"name":"Example City","latitude":10,"longitude":20,"country":"Example Country"}
+
+# Replace <id> below with the integer returned by POST.
+curl -i -X PUT 'http://localhost:3001/capital/<id>' \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Updated City","latitude":11,"longitude":21,"country":"Updated Country"}'
+# 200: {"id":<id>,"name":"Updated City","latitude":11,"longitude":21,"country":"Updated Country"}
+curl -i -X DELETE 'http://localhost:3001/capital/<id>'
+# 204, empty body
+curl -i http://localhost:3001/capital/NoSuchCapital
+# 404: {"error":"Capital not found"}
 ```
-GET    /capital          all capital cities
-GET    /capital/<name>   one by name (case-insensitive)
-POST   /capital          create
-PUT    /capital/<id>     update
-DELETE /capital/<id>     delete
-```
+
+These write examples change data in the database used by the running API.
+For automated checks, `npm test` runs Fastify `inject()` success/error tests with
+a mocked DB, without starting the importer or listener. Use the disposable
+PostgreSQL example above to verify actual CRUD SQL, uniqueness conflicts on POST
+and PUT, persistence after updates/deletes, and existing importer/health behavior.
 
 ## Frontend
 
