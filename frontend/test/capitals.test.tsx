@@ -10,9 +10,12 @@ const berlin = { id: 1, name: "Berlin", country: "Germany", latitude: 52.52, lon
 afterEach(() => { useCapitalStore.setState({ capitals: [], loading: false, error: null }); });
 
 test("API requests the plain capital array with native fetch", async (t) => {
+  const signal = new AbortController().signal;
+  const timeoutMock = t.mock.method(AbortSignal, "timeout", () => signal);
   const fetchMock = t.mock.method(globalThis, "fetch", async () => Response.json([berlin]));
   assert.deepEqual(await getCapitals(), [berlin]);
-  assert.deepEqual(fetchMock.mock.calls[0].arguments, ["/capital", { headers: { Accept: "application/json" } }]);
+  assert.deepEqual(timeoutMock.mock.calls[0].arguments, [15_000]);
+  assert.deepEqual(fetchMock.mock.calls[0].arguments, ["/capital", { headers: { Accept: "application/json" }, signal }]);
 });
 
 test("API accepts an empty array", async (t) => {
@@ -28,6 +31,45 @@ test("API reports HTTP errors without displaying server internals", async (t) =>
 test("API reports network failures", async (t) => {
   t.mock.method(globalThis, "fetch", async () => { throw new TypeError("Failed to fetch"); });
   await assert.rejects(getCapitals(), /Could not reach the capital API/);
+});
+
+test("API times out while reading a response body with a safe message", async (t) => {
+  const controller = new AbortController();
+  t.mock.method(AbortSignal, "timeout", () => controller.signal);
+  const response = Response.json([berlin]);
+  t.mock.method(response, "json", () => new Promise((_resolve, reject) => {
+    controller.signal.addEventListener("abort", () => reject(controller.signal.reason), { once: true });
+    controller.abort(new DOMException("Internal timeout details", "TimeoutError"));
+  }));
+  t.mock.method(globalThis, "fetch", async () => response);
+  await assert.rejects(getCapitals(), { message: "The capital API took too long to respond. Please try again." });
+});
+
+test("store releases a timed-out request and retry uses a fresh signal", async (t) => {
+  const controller = new AbortController();
+  let attempts = 0;
+  t.mock.method(AbortSignal, "timeout", () => attempts === 0 ? controller.signal : new AbortController().signal);
+  t.mock.method(globalThis, "fetch", async (_url: RequestInfo | URL, options?: RequestInit) => {
+    attempts += 1;
+    if (attempts === 1) {
+      return new Promise<Response>((_resolve, reject) => {
+        options!.signal!.addEventListener("abort", () => reject(options!.signal!.reason), { once: true });
+      });
+    }
+    assert.equal(options!.signal!.aborted, false);
+    return Response.json([berlin]);
+  });
+  const fetchCapitals = useCapitalStore.getState().fetchCapitals;
+  const request = fetchCapitals();
+  assert.equal(useCapitalStore.getState().loading, true);
+  controller.abort(new DOMException("Internal timeout details", "TimeoutError"));
+  await request;
+  assert.equal(useCapitalStore.getState().loading, false);
+  assert.equal(useCapitalStore.getState().error, "The capital API took too long to respond. Please try again.");
+  await fetchCapitals();
+  assert.equal(attempts, 2);
+  assert.equal(useCapitalStore.getState().error, null);
+  assert.deepEqual(useCapitalStore.getState().capitals, [berlin]);
 });
 
 test("API rejects malformed JSON and incompatible response shapes", async (t) => {
@@ -88,6 +130,7 @@ test("list renders country and capital names using semantic list items", () => {
 test("list announces loading and hides stale data", () => {
   const html = renderToStaticMarkup(<CapitalList capitals={[berlin]} loading={true} error={null} onRetry={async () => {}} />);
   assert.match(html, /aria-busy="true"/);
+  assert.match(html, /role="region" aria-label="Capital results" aria-busy="true" tabindex="0"/);
   assert.match(html, /role="status">Loading capitals…/);
   assert.doesNotMatch(html, /Berlin|Try again/);
 });

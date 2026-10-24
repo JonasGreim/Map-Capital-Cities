@@ -19,10 +19,13 @@ function isCapital(value: unknown): value is Capital {
 }
 
 export async function getCapitals(): Promise<Capital[]> {
+  const signal = AbortSignal.timeout(15_000);
+  const timeoutMessage = "The capital API took too long to respond. Please try again.";
   let response: Response;
   try {
-    response = await fetch("/capital", { headers: { Accept: "application/json" } });
+    response = await fetch("/capital", { headers: { Accept: "application/json" }, signal });
   } catch {
+    if (signal.aborted) throw new Error(timeoutMessage);
     throw new Error("Could not reach the capital API. Check your connection and try again.");
   }
   if (!response.ok) {
@@ -33,6 +36,7 @@ export async function getCapitals(): Promise<Capital[]> {
   try {
     data = await response.json();
   } catch {
+    if (signal.aborted) throw new Error(timeoutMessage);
     throw new Error("The capital API returned an invalid response. Please try again.");
   }
   if (!Array.isArray(data) || !data.every(isCapital)) {
