@@ -4,7 +4,7 @@ import { buildApp } from "../src/app.js";
 
 test("GET /health checks the database before returning ok", async (t) => {
   const queries: string[] = [];
-  const app = buildApp({ query: async (sql) => { queries.push(sql); } });
+  const app = buildApp({ query: async (sql) => { queries.push(sql); return { rows: [] }; } });
   t.after(() => app.close());
 
   const response = await app.inject({ method: "GET", url: "/health" });
