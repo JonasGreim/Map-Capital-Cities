@@ -6,6 +6,11 @@ and both pages of the local assignment PDF. This report records new verification
 not results inherited from earlier PRs. No release-blocking defect was found;
 application code, dependencies and test infrastructure required no changes.
 
+This is the historical P0 verification of the commit above. Optional frontend
+CRUD is implemented separately in Issue #6; its checks and browser evidence are
+recorded in that PR. The deferrals and test counts below describe the P0 snapshot,
+not the later frontend CRUD feature.
+
 ## Mandatory assignment checklist
 
 | Requirement | Implementation | Independent verification | Result / limits |

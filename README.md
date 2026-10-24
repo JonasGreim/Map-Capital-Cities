@@ -273,6 +273,47 @@ again” button, which fetches again and clears the previous error. Existing dat
 is retained in the store during reload/failure but hidden by the status message;
 a successful response replaces it, including when the new array is empty.
 
+### Create, edit and delete capitals
+
+Choose **Add capital** above the list to open the form. Enter a capital name,
+country name, latitude and longitude, then choose **Create capital**. Choose
+**Edit** beside a list entry to change the same four fields and **Save changes**.
+Choose **Delete** beside an entry, review the capital/country in the confirmation,
+then choose **Delete capital**. **Cancel** or Escape closes either dialog without
+writing. While a request is pending, controls and dismissal are disabled to avoid
+duplicate submissions. Success is announced above the list.
+
+All fields are required. Blank names/countries and invalid characters are rejected;
+latitude must be a finite number in [-90, 90] and longitude in [-180, 180]. Field
+errors are linked to their inputs and the first invalid input receives focus.
+Coordinates are sent as JSON numbers. Edit sends the complete record using its
+original database ID. Duplicate capital names (case-insensitive) or countries
+(exact match), missing records, invalid requests and server/network failures show
+safe messages inside the dialog and retain entered values. Requests time out after
+15 seconds. A lost/malformed response can leave a write's outcome uncertain:
+cancel and use **Refresh list** before retrying. No server internals are displayed.
+
+The typed client reuses the existing POST/PUT/DELETE endpoints (including DELETE's
+empty 204 response). After each confirmed write, Zustand applies the returned
+record or removes its ID in the shared array, keeping names ordered
+case-insensitively. No optimistic writes, follow-up GET or full page reload is
+needed. Reads and mutations cannot overlap in the UI/store. The list and existing
+Mapbox marker lifecycle consume the same state: names/popups and coordinates
+update, deleted markers/popups disappear, and the map instance and other marker
+colors remain intact. Reload/refresh retrieves PostgreSQL data; other browser
+sessions are synchronized only when refreshed. Dialogs support keyboard operation,
+restore focus to the initiating control, and fall back to Add capital after deletion.
+
+**Persistence limitation:** CRUD writes are stored in PostgreSQL, but REST Countries
+is reimported on **every backend startup**. Deleted imported capitals can reappear
+after a restart; editing both unique names can also allow the original to return.
+This feature does not change the import policy or add a reset/reseed action.
+
+Focused Node tests cover mutation HTTP contracts/errors, required/bounded fields,
+pending requests and shared-state updates. Interactive cancellation, focus,
+list/marker synchronization and desktop/mobile layouts are checked separately
+in a real isolated Chromium session against disposable PostgreSQL.
+
 On desktop the list scrolls beside a map that fills the remaining space. At
 700px and below they stack, with a bounded, keyboard-scrollable list above a
 full-width map. Mapbox initializes independently of capital data; a resize
