@@ -90,17 +90,32 @@ docker compose exec -T db psql -U postgres -d capitals -v ON_ERROR_STOP=1 < db/s
 The script can be reapplied to this schema. It is not a migration framework and
 does not repair an incompatible, manually created `capitals` table.
 
-For real PostgreSQL checks, point the opt-in suite at a **disposable test database**:
+The regular Docker Compose database uses host port **5432**. For real PostgreSQL
+checks, use a separate **disposable test database** on host port **55432**. Run
+this example from the repository root with that port free:
 
 ```bash
-TEST_DATABASE_URL=postgres://postgres:postgres@localhost:55432/capitals npm test
+(
+  set -e
+  test_container=$(docker run --detach --rm \
+    --publish 127.0.0.1:55432:5432 \
+    --env POSTGRES_PASSWORD=postgres --env POSTGRES_DB=capitals_test \
+    --tmpfs /var/lib/postgresql/data postgres:16)
+  trap 'docker stop "$test_container" >/dev/null' EXIT
+  TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/capitals_test npm test
+)
 ```
 
-The suite creates a uniquely named schema, tests constraints, multi-page import,
+This starts PostgreSQL 16 with temporary in-memory storage and stops/removes
+only that test container when the subshell exits, including when tests fail.
+It does not mount or modify the normal development database or its volumes.
+The integration suite uses `TEST_DATABASE_URL`, waits for PostgreSQL readiness,
+creates a uniquely named temporary schema, tests constraints, multi-page import,
 repeat imports, local edits, deletion/reimport, rollback and DB-backed health,
-then removes only that test schema. It never uses `DATABASE_URL` as a fallback.
-REST Countries is still mocked; no real API key is needed. Real startup with a
-valid key should log import counts before the API begins listening.
+then removes only that test schema. It never falls back to `DATABASE_URL` and
+skips these integration checks when `TEST_DATABASE_URL` is unset. REST Countries
+is still mocked; no real API key is needed. Real startup with a valid key should
+log import counts before the API begins listening.
 
 ## Backend
 
@@ -141,13 +156,16 @@ Success logs include pages, fetched records, skipped invalid records, conflicts
 records. Failure logs include the failing stage/offset and progress counts;
 uncommitted inserts are never reported as imported.
 
-**Initial import policy:** every backend start imports again, without updating
-existing records or writing a persistent completion marker. Records conflicting
-with either unique constraint retain their local values. **Deleting an imported
-capital may cause it to reappear after a backend restart.** Changing both its name
-and country can likewise allow the original to be inserted again, because neither
-unique key then matches. A future seed-once policy can wrap the importer without
-changing its fetching/transformation logic; no reset button is included here.
+**Current import policy and limitations:** REST Countries is queried on every
+backend startup, even when local records already exist. Existing records retain
+their local values when either unique key still matches: the case-insensitive
+capital name or the exact country. **Deleted imported capitals can reappear after
+a backend restart.** Changing both the capital name and country can also allow
+the original record to be imported again, because neither unique key then matches.
+Backend startup currently depends on REST Countries being available: a failed
+request aborts startup before the API begins listening. These are limitations of
+the agreed startup-import policy; no persistent completion marker or reset button
+is implemented.
 
 Endpoints:
 
