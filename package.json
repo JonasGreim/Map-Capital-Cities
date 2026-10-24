@@ -9,7 +9,7 @@
     "build": "npm run build -w backend && npm run build -w frontend",
     "lint": "eslint .",
     "typecheck": "npm run typecheck --workspaces",
-    "test": "npm run test -w backend",
+    "test": "npm run test --workspaces",
     "check": "npm run lint && npm run typecheck && npm run build",
     "db": "docker compose up -d db"
   },
