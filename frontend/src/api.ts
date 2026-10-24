@@ -6,6 +6,8 @@ export type Capital = {
   longitude: number;
 };
 
+export type CapitalInput = Omit<Capital, "id">;
+
 function isCapital(value: unknown): value is Capital {
   if (typeof value !== "object" || value === null) return false;
   const capital = value as Record<string, unknown>;
@@ -43,4 +45,49 @@ export async function getCapitals(): Promise<Capital[]> {
     throw new Error("The capital API returned an invalid response. Please try again.");
   }
   return data;
+}
+
+async function mutateCapital(method: "POST" | "PUT" | "DELETE", id?: number, input?: CapitalInput): Promise<Capital | void> {
+  const signal = AbortSignal.timeout(15_000);
+  const uncertain = "The change may have been saved. Refresh the list before trying again.";
+  let response: Response;
+  try {
+    response = await fetch(id === undefined ? "/capital" : `/capital/${id}`, {
+      method,
+      headers: { Accept: "application/json", ...(input ? { "Content-Type": "application/json" } : {}) },
+      ...(input ? { body: JSON.stringify(input) } : {}),
+      signal,
+    });
+  } catch {
+    throw new Error(`${signal.aborted ? "The capital API took too long to respond." : "Could not reach the capital API."} ${uncertain}`);
+  }
+  if (!response.ok) {
+    const messages: Record<number, string> = {
+      400: "Check all fields and coordinate ranges, then try again.",
+      404: "This capital no longer exists. Cancel and refresh the list.",
+      409: "A capital with this name or country already exists. Choose another name or country.",
+    };
+    throw new Error(messages[response.status] ?? "Unable to save the change. Please try again.");
+  }
+  if (method === "DELETE" && response.status === 204) return;
+  let data: unknown;
+  try { data = await response.json(); } catch {
+    throw new Error(`The capital API returned an invalid response. ${uncertain}`);
+  }
+  if (method === "DELETE" || !isCapital(data) || (id !== undefined && data.id !== id)) {
+    throw new Error(`The capital API returned an invalid response. ${uncertain}`);
+  }
+  return data;
+}
+
+export async function createCapital(input: CapitalInput): Promise<Capital> {
+  return await mutateCapital("POST", undefined, input) as Capital;
+}
+
+export async function updateCapital(id: number, input: CapitalInput): Promise<Capital> {
+  return await mutateCapital("PUT", id, input) as Capital;
+}
+
+export async function deleteCapital(id: number): Promise<void> {
+  await mutateCapital("DELETE", id);
 }

@@ -123,8 +123,18 @@ test("store exposes failures, clears the error on retry and replaces data on rel
 test("list renders country and capital names using semantic list items", () => {
   const html = renderToStaticMarkup(<CapitalList capitals={[berlin]} loading={false} error={null} onRetry={async () => {}} />);
   assert.match(html, /<h2[^>]*>Countries &amp; capitals<\/h2>/);
-  assert.match(html, /<ul[^>]*><li><span[^>]*>Germany<\/span><span[^>]*>Berlin<\/span><\/li><\/ul>/);
+  assert.match(html, /<ul[^>]*><li><span[^>]*>Germany<\/span><span[^>]*>Berlin<\/span>/);
+  assert.match(html, /aria-label="Edit Berlin"/);
+  assert.match(html, /aria-label="Delete Berlin"/);
   assert.match(html, /aria-label="1 capital"/);
+});
+
+test("skip link is available before the long list, including loading and error states", () => {
+  for (const state of [{ loading: false, error: null }, { loading: true, error: null }, { loading: false, error: "Unable to load capitals." }]) {
+    const html = renderToStaticMarkup(<CapitalList capitals={[berlin]} {...state} onRetry={async () => {}} />);
+    assert.match(html, /<a[^>]*href="#world-map"[^>]*>Skip to map<\/a>/);
+    assert.ok(html.indexOf("Skip to map") < html.indexOf('aria-label="Capital results"'));
+  }
 });
 
 test("list announces loading and hides stale data", () => {
