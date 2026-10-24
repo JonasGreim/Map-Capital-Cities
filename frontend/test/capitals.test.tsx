@@ -129,6 +129,14 @@ test("list renders country and capital names using semantic list items", () => {
   assert.match(html, /aria-label="1 capital"/);
 });
 
+test("skip link is available before the long list, including loading and error states", () => {
+  for (const state of [{ loading: false, error: null }, { loading: true, error: null }, { loading: false, error: "Unable to load capitals." }]) {
+    const html = renderToStaticMarkup(<CapitalList capitals={[berlin]} {...state} onRetry={async () => {}} />);
+    assert.match(html, /<a[^>]*href="#world-map"[^>]*>Skip to map<\/a>/);
+    assert.ok(html.indexOf("Skip to map") < html.indexOf('aria-label="Capital results"'));
+  }
+});
+
 test("list announces loading and hides stale data", () => {
   const html = renderToStaticMarkup(<CapitalList capitals={[berlin]} loading={true} error={null} onRetry={async () => {}} />);
   assert.match(html, /aria-busy="true"/);

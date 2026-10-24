@@ -15,7 +15,7 @@ export function App() {
       </header>
       <div className="layout">
         <CapitalList capitals={capitals} loading={loading} error={error} onRetry={fetchCapitals} />
-        <section className="map-panel" aria-label="World map">
+        <section id="world-map" className="map-panel" aria-label="World map" tabIndex={-1}>
           <Map />
         </section>
       </div>

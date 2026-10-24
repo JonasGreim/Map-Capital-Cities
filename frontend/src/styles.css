@@ -30,6 +30,9 @@ h1, h2, p { margin: 0; }
 button { min-height: 2.75rem; padding: 0.55rem 1rem; border: 1px solid #216278; border-radius: 0.4rem; background: #216278; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
 button:hover { background: #194c5d; }
 button:focus-visible, .list-content:focus-visible { outline: 3px solid #bc5e12; outline-offset: 3px; }
+.skip-to-map { align-self: flex-start; margin: 0 1.25rem 0.75rem; color: #216278; }
+.skip-to-map:focus-visible { outline: 3px solid #bc5e12; outline-offset: 3px; }
+.map-panel:focus-visible { outline: 3px solid #bc5e12; outline-offset: -3px; }
 .list-actions, .row-actions, .dialog-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .list-actions { padding: 0.75rem 1.25rem; }
 .row-actions { margin-top: 0.5rem; }

@@ -28,6 +28,7 @@ export function CapitalList({ capitals, loading, error, onRetry }: CapitalListPr
   }, [loading, error]);
 
   function retry() {
+    setNotice("");
     retryPending.current = true;
     results.current?.focus({ preventScroll: true });
     void onRetry();
@@ -43,6 +44,7 @@ export function CapitalList({ capitals, loading, error, onRetry }: CapitalListPr
         <button id="add-capital" type="button" disabled={loading || mutating || !!error} onClick={() => { setNotice(""); setEditor({}); }}>Add capital</button>
         <button type="button" className="secondary" disabled={loading || mutating} onClick={retry}>Refresh list</button>
       </div>
+      <a className="skip-to-map" href="#world-map">Skip to map</a>
       <p className="mutation-notice" role="status">{notice}</p>
       <div ref={results} className="list-content" role="region" aria-label="Capital results" aria-busy={loading} tabIndex={0}>
         {loading ? (
