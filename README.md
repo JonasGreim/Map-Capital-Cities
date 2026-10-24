@@ -58,8 +58,15 @@ App construction (`buildApp` in
 
 `npm audit` still reports Vite 5 (high) and its esbuild dependency (moderate).
 These development-tool advisories require a separately reviewed Vite upgrade;
-do not use `npm audit fix --force`. The Express/body-parser and shell-quote
+do not use `npm audit fix --force`. On 24 October 2026, `npm audit --omit=dev`
+reported no production dependency vulnerabilities. Keep development servers on
+trusted networks; the configured Vite server binds to all interfaces by default.
+The Express/body-parser and shell-quote
 findings were removed by the Fastify migration and a compatible concurrently 9 update.
+
+The [final validation report](docs/final-validation.md) records the independently
+checked assignment requirements, fresh setup, live PostgreSQL/Mapbox results,
+remaining limitations and manual submission checklist for Issue #7.
 
 Repository Codex guidance is in `AGENTS.md`; use `$issue-work #N` for implementation
 and `$pr-review #N` for a read-only review. `.codex/config.toml` contains pinned,
