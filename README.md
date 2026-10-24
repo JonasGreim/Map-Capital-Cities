@@ -42,14 +42,16 @@ npm run lint           # ESLint flat config, TypeScript, React and React Hooks r
 npm run typecheck      # both workspaces, including backend tests
 npm run build          # backend TypeScript + frontend Vite production build
 npm run check          # lint + typecheck + build
-npm test               # Fastify inject tests: health success, DB failure and CORS
+npm test               # mocked importer/readiness tests and Fastify health/CORS tests
 git diff --check
 ```
 
-CI runs `npm ci`, `npm run check` and the health tests on PRs and main pushes,
-using the pinned runtime without secrets or a database. The health tests inject a
-fake DB; verify the real connection separately with `curl -i http://localhost:3001/health`
-after starting PostgreSQL and the API. App construction (`buildApp` in
+CI runs `npm ci`, `npm run check` and `npm test` on PRs and main pushes,
+using the pinned runtime without secrets or a database. Import tests mock REST
+Countries; the health tests inject a fake DB. The optional PostgreSQL suite skips
+unless `TEST_DATABASE_URL` is explicitly set (see below). Verify the real running
+API separately with `curl -i http://localhost:3001/health` after startup completes.
+App construction (`buildApp` in
 `backend/src/app.ts`) does not start a listener.
 
 `npm audit` still reports Vite 5 (high) and its esbuild dependency (moderate).
@@ -66,10 +68,54 @@ required for the static checks above.
 ## Data
 
 ```json
-{ "id": "...", "name": "string", "latitude": 0.0, "longitude": 0.0, "country": "string" }
+{ "id": 1, "name": "string", "latitude": 0.0, "longitude": 0.0, "country": "string" }
 ```
 
-`name` and `country` are unique. Provide `db/schema.sql`; it must run automatically the first time the database starts.
+`db/schema.sql` creates `capitals` with an automatically generated integer ID,
+non-null/nonblank names and countries, latitude in [-90, 90] and longitude in
+[-180, 180]. Capital names are unique case-insensitively (`lower(name)` index);
+countries have an exact unique constraint.
+
+Both Compose configurations mount this SQL file read-only into PostgreSQL's
+`/docker-entrypoint-initdb.d/`. It runs automatically **only when the database
+storage is first initialized**. Existing `pgdata` volumes and rows are preserved;
+Docker does not rerun init scripts on them. For an existing starter database,
+apply the schema once without resetting its volume:
+
+```bash
+docker compose exec -T db psql -U postgres -d capitals -v ON_ERROR_STOP=1 < db/schema.sql
+# In a devcontainer, use: docker compose -f .devcontainer/docker-compose.yml exec ...
+```
+
+The script can be reapplied to this schema. It is not a migration framework and
+does not repair an incompatible, manually created `capitals` table.
+
+The regular Docker Compose database uses host port **5432**. For real PostgreSQL
+checks, use a separate **disposable test database** on host port **55432**. Run
+this example from the repository root with that port free:
+
+```bash
+(
+  set -e
+  test_container=$(docker run --detach --rm \
+    --publish 127.0.0.1:55432:5432 \
+    --env POSTGRES_PASSWORD=postgres --env POSTGRES_DB=capitals_test \
+    --tmpfs /var/lib/postgresql/data postgres:16)
+  trap 'docker stop "$test_container" >/dev/null' EXIT
+  TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/capitals_test npm test
+)
+```
+
+This starts PostgreSQL 16 with temporary in-memory storage and stops/removes
+only that test container when the subshell exits, including when tests fail.
+It does not mount or modify the normal development database or its volumes.
+The integration suite uses `TEST_DATABASE_URL`, waits for PostgreSQL readiness,
+creates a uniquely named temporary schema, tests constraints, multi-page import,
+repeat imports, local edits, deletion/reimport, rollback and DB-backed health,
+then removes only that test schema. It never falls back to `DATABASE_URL` and
+skips these integration checks when `TEST_DATABASE_URL` is unset. REST Countries
+is still mocked; no real API key is needed. Real startup with a valid key should
+log import counts before the API begins listening.
 
 ## Backend
 
@@ -80,6 +126,46 @@ On startup, import countries and capitals from [REST Countries](https://restcoun
 GET https://api.restcountries.com/countries/v5
 Authorization: Bearer <RESTCOUNTRIES_API_KEY>
 ```
+
+`backend/src/import-capitals.ts` is independent of the server bootstrap. Startup
+first checks PostgreSQL readiness (up to 10 attempts, 1 second between failures;
+connections time out after 2 seconds and queries after 5 seconds), then imports,
+then listens on port 3001. A missing key, unavailable DB, failed import or missing
+schema aborts startup with a visible error and nonzero exit status. The root
+`.env` is loaded before creating the pool; the API key remains server-side.
+
+The importer requests `limit=100` and advances `offset` by the returned count.
+It maps `data.objects`: `names.common` → country, `capitals[0].name` → name and
+`capitals[0].coordinates.lat/lng` → coordinates. Text is trimmed; missing/blank
+names, missing first capitals, nonnumeric/nonfinite or out-of-range coordinates
+are skipped. Additional capitals are ignored as required by the assignment.
+
+Pagination follows and validates `data.meta.total/count/limit/offset/more` from
+the [v5 documentation](https://restcountries.com/docs/countries#pagination).
+Without metadata it continues full pages until a short/empty page. Contradictory
+metadata, stalled/repeated pages, changing totals, demo responses, invalid JSON
+or envelopes, HTTP errors and network failures fail the import. Each request has
+a 15-second timeout; a 100-page safety cap prevents an endless import. Failed
+requests are not automatically retried; fix the error and restart the backend.
+
+All pages are fetched and validated before opening a transaction. Parameterized
+inserts use `ON CONFLICT DO NOTHING`; one transaction commits all valid records
+or rolls back on a database error. A failed later API page causes no DB writes.
+Success logs include pages, fetched records, skipped invalid records, conflicts
+(`skippedExisting`, including duplicates within the API result) and inserted
+records. Failure logs include the failing stage/offset and progress counts;
+uncommitted inserts are never reported as imported.
+
+**Current import policy and limitations:** REST Countries is queried on every
+backend startup, even when local records already exist. Existing records retain
+their local values when either unique key still matches: the case-insensitive
+capital name or the exact country. **Deleted imported capitals can reappear after
+a backend restart.** Changing both the capital name and country can also allow
+the original record to be imported again, because neither unique key then matches.
+Backend startup currently depends on REST Countries being available: a failed
+request aborts startup before the API begins listening. These are limitations of
+the agreed startup-import policy; no persistent completion marker or reset button
+is implemented.
 
 Endpoints:
 
