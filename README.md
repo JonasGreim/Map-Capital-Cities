@@ -42,13 +42,15 @@ npm run lint           # ESLint flat config, TypeScript, React and React Hooks r
 npm run typecheck      # both workspaces, including backend tests
 npm run build          # backend TypeScript + frontend Vite production build
 npm run check          # lint + typecheck + build
-npm test               # mocked importer/readiness and Fastify CRUD/health/CORS tests
+npm test               # backend tests plus frontend API, Zustand and list-state tests
 git diff --check
 ```
 
 CI runs `npm ci`, `npm run check` and `npm test` on PRs and main pushes,
 using the pinned runtime without secrets or a database. Import tests mock REST
-Countries; API tests inject a fake DB. The optional PostgreSQL suite skips
+Countries; backend API tests inject a fake DB. Frontend tests use the existing
+Node test runner/tsx with mocked fetch and React server rendering; they need
+neither a browser nor a Mapbox token. The optional PostgreSQL suite skips
 unless `TEST_DATABASE_URL` is explicitly set (see below). Verify the real running
 API separately with `curl -i http://localhost:3001/health` after startup completes.
 App construction (`buildApp` in
@@ -236,7 +238,64 @@ and PUT, persistence after updates/deletes, and existing importer/health behavio
 
 ## Frontend
 
-Connect the UI to the endpoints above. Implementation and UI/UX choices are yours.
+The React app loads `GET /capital` on mount using native `fetch`. The typed client
+expects the backend's plain array of capital objects, validates the response and
+reports HTTP, network and malformed-response errors. `frontend/src/capital-store.ts`
+uses Zustand as the shared source for capitals, loading and error state. Its
+`fetchCapitals` action also supports reload/retry and shares an in-flight request
+between callers, including React effect remounts, so responses cannot race.
+
+Run `npm run dev` from the repository root to start both workspaces, or start
+`npm run dev -w backend` and `npm run dev -w frontend` in separate terminals.
+Use the setup steps above first: the backend needs PostgreSQL, the schema and a
+valid REST Countries key, and completes its import before listening. Visit
+`http://localhost:5173`; Mapbox needs `VITE_MAPBOX_TOKEN` in the root `.env`.
+
+The browser requests the same-origin relative URL `/capital`. Vite's **development**
+proxy forwards `/capital` requests to `http://127.0.0.1:3001`, using `PORT` from
+the process environment or root `.env` when set (restart Vite after changing it).
+No client-side API URL or additional environment variable is required. The REST
+Countries key and database URL stay server-side. A production host must route
+`/capital` to Fastify on the same origin; the static build and `vite preview`
+do not provide the development proxy.
+
+The English list shows each country and capital, preserving API order. During a
+request it announces “Loading capitals…”. An empty array shows “No capitals
+available yet.” Errors show a readable message and a keyboard-accessible “Try
+again” button, which fetches again and clears the previous error. Existing data
+is retained in the store during reload/failure but hidden by the status message;
+a successful response replaces it, including when the new array is empty.
+
+On desktop the list scrolls beside a map that fills the remaining space. At
+700px and below they stack, with a bounded, keyboard-scrollable list above a
+full-width map. Mapbox initializes independently of capital data; a resize
+observer keeps its canvas sized to its panel and is disconnected along with the
+map on unmount. A missing Mapbox token shows setup guidance while the list still
+works. Capital markers, popups and frontend editing are reserved for later issues.
+
+### Frontend verification
+
+`npm test -w frontend` covers the API contract and failures, request sharing,
+loading/error transitions, retry/reload and the rendered list states. These unit
+tests mock fetch; they do not establish database or browser integration.
+
+For a real browser check after backend startup:
+
+1. Open the frontend in Chrome/Chromium and compare the country/capital pairs
+   with `curl -s http://localhost:3001/capital`. Reload and verify a single
+   browser `/capital` request and a working, zoomable Mapbox map.
+2. Inspect desktop and narrow (for example, 390px and 320px) layouts: scroll the
+   list, check that the map resizes and that no horizontal page scrolling is needed.
+3. With Playwright request interception, hold `/capital` to inspect loading,
+   fulfill it with `[]` for empty, or return HTTP 503 for error. Remove the error
+   interception, focus “Try again” and press Enter: real records should return
+   without replacing the map canvas. Do not delete development data to test empty.
+4. Inspect browser console errors. An intentionally mocked HTTP failure is
+   expected during the error check; normal loading should have no errors.
+
+The isolated browser MCP tools configured in `.codex/config.toml` can run these
+checks locally with the root `.env`. Browser checks remain separate from CI and
+do not introduce private API keys or Mapbox credentials into GitHub Actions.
 
 ## Priorities
 

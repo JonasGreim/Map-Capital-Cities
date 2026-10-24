@@ -10,9 +10,11 @@ export function Map() {
     if (!token || !el.current) return;
     mapboxgl.accessToken = token;
     const map = new mapboxgl.Map({ container: el.current, style: "mapbox://styles/mapbox/streets-v12", center: [10, 30], zoom: 1.5 });
-    return () => map.remove();
+    const observer = new ResizeObserver(() => map.resize());
+    observer.observe(el.current);
+    return () => { observer.disconnect(); map.remove(); };
   }, []);
 
-  if (!token) return <div className="map">Set VITE_MAPBOX_TOKEN in .env</div>;
+  if (!token) return <div className="map map-unavailable" role="status">Map unavailable. Set VITE_MAPBOX_TOKEN in the root .env and restart the frontend.</div>;
   return <div className="map" ref={el} />;
 }

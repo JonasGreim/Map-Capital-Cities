@@ -1,11 +1,24 @@
+import { useEffect } from "react";
+import { CapitalList } from "./CapitalList";
 import { Map } from "./Map";
+import { useCapitalStore } from "./capital-store";
 
-// TODO (candidate): Zustand store, capital list, add/edit/delete, markers (see README)
 export function App() {
+  const { capitals, loading, error, fetchCapitals } = useCapitalStore();
+  useEffect(() => { void fetchCapitals(); }, [fetchCapitals]);
+
   return (
-    <div className="layout">
-      <aside className="sidebar"><h2>Capitals</h2></aside>
-      <Map />
-    </div>
+    <main className="app">
+      <header className="app-header">
+        <h1>Capital Cities</h1>
+        <p>Discover countries and their capitals around the world.</p>
+      </header>
+      <div className="layout">
+        <CapitalList capitals={capitals} loading={loading} error={error} onRetry={fetchCapitals} />
+        <section className="map-panel" aria-label="World map">
+          <Map />
+        </section>
+      </div>
+    </main>
   );
 }
