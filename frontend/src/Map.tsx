@@ -13,6 +13,8 @@ export function Map() {
   const capitals = useCapitalStore((state) => state.capitals);
   const selectionVersion = useCapitalStore((state) => state.selectionVersion);
   const selectedCapitalId = useCapitalStore((state) => state.selectedCapitalId);
+  const resetVersion = useCapitalStore((state) => state.resetVersion);
+  const appliedReset = useRef(resetVersion);
 
   useEffect(() => {
     if (!token || !el.current) return;
@@ -65,7 +67,13 @@ export function Map() {
     };
   }, []);
 
-  useEffect(() => { markers.current?.update(capitals); }, [capitals]);
+  useEffect(() => {
+    if (appliedReset.current !== resetVersion) {
+      markers.current?.reset();
+      appliedReset.current = resetVersion;
+    }
+    markers.current?.update(capitals);
+  }, [capitals, resetVersion]);
   useEffect(() => {
     const state = useCapitalStore.getState();
     markers.current?.select(state.selectedCapitalId, state.selectionSource === "list");

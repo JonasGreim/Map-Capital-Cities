@@ -4,6 +4,7 @@ import Fastify from "fastify";
 import { pool } from "./db.js";
 import { capitalRoutes } from "./capital-routes.js";
 import type { CapitalDatabase } from "./capitals.js";
+import { resetRoutes } from "./reset-capitals.js";
 
 export function buildApp(database: CapitalDatabase = pool, flagCodes: ReadonlyMap<string, string | null> = new Map()) {
   const app = Fastify({ ajv: { customOptions: { coerceTypes: false, removeAdditional: false } } });
@@ -15,6 +16,7 @@ export function buildApp(database: CapitalDatabase = pool, flagCodes: ReadonlyMa
   });
 
   app.register(async (routes) => { capitalRoutes(routes, database, flagCodes); });
+  app.register(async (routes) => { resetRoutes(routes, database, flagCodes); });
 
   return app;
 }

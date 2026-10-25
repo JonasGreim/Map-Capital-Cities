@@ -55,7 +55,7 @@ export async function getCapitals(): Promise<Capital[]> {
 
 async function mutateCapital(method: "POST" | "PUT" | "DELETE", id?: number, input?: CapitalInput): Promise<Capital | void> {
   const signal = AbortSignal.timeout(15_000);
-  const uncertain = "The change may have been saved. Refresh the list before trying again.";
+  const uncertain = "The change may have been saved. Reload the page before trying again.";
   let response: Response;
   try {
     response = await fetch(id === undefined ? "/capital" : `/capital/${id}`, {
@@ -70,7 +70,7 @@ async function mutateCapital(method: "POST" | "PUT" | "DELETE", id?: number, inp
   if (!response.ok) {
     const messages: Record<number, string> = {
       400: "Check all fields and coordinate ranges, then try again.",
-      404: "This capital no longer exists. Cancel and refresh the list.",
+      404: "This capital no longer exists. Cancel and reload the page.",
       409: "A capital with this name or country already exists. Choose another name or country.",
     };
     throw new Error(messages[response.status] ?? "Unable to save the change. Please try again.");
@@ -96,4 +96,27 @@ export async function updateCapital(id: number, input: CapitalInput): Promise<Ca
 
 export async function deleteCapital(id: number): Promise<void> {
   await mutateCapital("DELETE", id);
+}
+
+export async function resetCapitals(): Promise<Capital[]> {
+  const uncertain = "The reset may have completed. Reload current data before deciding whether to reset again.";
+  let response: Response;
+  try {
+    response = await fetch("/capital-reset", {
+      method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: true }), signal: AbortSignal.timeout(15_000),
+    });
+  } catch { throw new Error(`Could not confirm the reset. ${uncertain}`); }
+  if (!response.ok) {
+    if (response.status === 409) throw new Error("Another reset is in progress. Reload current data before trying again.");
+    throw new Error(`Unable to reset capitals (HTTP ${response.status}). ${uncertain}`);
+  }
+  let data: unknown;
+  try { data = await response.json(); }
+  catch { throw new Error(`The capital API returned an invalid response. ${uncertain}`); }
+  if (!Array.isArray(data) || data.length === 0 || !data.every(isCapital)
+    || new Set(data.map(capital => capital.id)).size !== data.length) {
+    throw new Error(`The capital API returned an invalid response. ${uncertain}`);
+  }
+  return data.map(readMetadata);
 }

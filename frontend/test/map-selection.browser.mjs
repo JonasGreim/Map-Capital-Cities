@@ -171,7 +171,10 @@ export async function verifyMapSelection(page, baseURL, screenshotDirectory) {
   assert.equal(await page.locator(".popup-coordinates").textContent(), "49.0000, 15.0000");
   assert.deepEqual(await page.evaluate(() => window.selectionFlights.at(-1).center), [15, 49]);
   const beforeRefresh = await countFlights();
-  await button("Refresh list").click();
+  await page.evaluate(async () => {
+    const { useCapitalStore } = await import("/src/capital-store.ts");
+    await useCapitalStore.getState().fetchCapitals();
+  });
   await button("Actions for Updated Prague").waitFor();
   assert.equal(await countFlights(), beforeRefresh);
   assert.equal(await button("Red marker").getAttribute("aria-pressed"), "true");

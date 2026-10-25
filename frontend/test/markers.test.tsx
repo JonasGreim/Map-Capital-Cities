@@ -380,3 +380,19 @@ test("popup flags reveal already cached images even without a later load event",
   controller.update([{ ...berlin, country: "Czechia", flagCode: "CZ" }]);
   assert.equal(popups[0].content!.children[4].children[0].hidden, false);
 });
+
+test("reset closes selection and restores every marker to Teal without camera movement", (t) => {
+  const { controller, markers, popups, flights } = setup(t);
+  controller.update([berlin, paris]);
+  controller.select(berlin.id);
+  choose(popups[0], markerColors[1].value);
+  controller.select(paris.id);
+  choose(popups[1], markerColors[2].value);
+  const before = flights.length;
+  controller.reset();
+  assert.equal(popups[1].removed, true);
+  assert.equal(flights.length, before);
+  assert.ok(markers.every(marker => marker.options.element.style.backgroundColor === markerColors[0].value));
+  controller.select(berlin.id);
+  assert.equal(popups[2].content!.children[3].children[1].children[0].attributes.get("aria-pressed"), "true");
+});

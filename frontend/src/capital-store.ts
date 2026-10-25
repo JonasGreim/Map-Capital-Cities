@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { createCapital, updateCapital, deleteCapital, getCapitals, type Capital, type CapitalInput } from "./api";
+import { createCapital, updateCapital, deleteCapital, getCapitals, resetCapitals, type Capital, type CapitalInput } from "./api";
 
 type CapitalState = {
   capitals: Capital[];
@@ -9,10 +9,12 @@ type CapitalState = {
   selectedCapitalId: number | null;
   selectionSource: "list" | "map";
   selectionVersion: number;
+  resetVersion: number;
   selectCapital: (id: number | null, source?: "list" | "map") => void;
   fetchCapitals: () => Promise<void>;
   saveCapital: (input: CapitalInput, id?: number) => Promise<void>;
   removeCapital: (id: number) => Promise<void>;
+  resetCapitals: () => Promise<void>;
 };
 
 // Share a pending request across consumers, including React effect remounts.
@@ -42,12 +44,21 @@ export const useCapitalStore = create<CapitalState>((set, get) => {
     selectedCapitalId: null,
     selectionSource: "list",
     selectionVersion: 0,
+    resetVersion: 0,
     selectCapital: (id, source = "list") => {
       if (id !== null && !get().capitals.some((capital) => capital.id === id)) return;
       set((state) => ({ selectedCapitalId: id, selectionSource: source, selectionVersion: state.selectionVersion + 1 }));
     },
     saveCapital: (input, id) => mutate(() => id === undefined ? createCapital(input) : updateCapital(id, input)),
     removeCapital: (id) => mutate(() => deleteCapital(id), id),
+    resetCapitals: async () => {
+      if (get().loading || get().mutating) throw new Error("Please wait for the current request to finish.");
+      set({ mutating: true });
+      try {
+        const capitals = await resetCapitals();
+        set((state) => ({ capitals, error: null, selectedCapitalId: null, resetVersion: state.resetVersion + 1 }));
+      } finally { set({ mutating: false }); }
+    },
     fetchCapitals: () => {
       if (pendingRequest) return pendingRequest;
       if (get().mutating) return Promise.resolve();
