@@ -12,6 +12,7 @@ import { verifyBranding } from "./branding.browser.mjs";
 import { verifyPopupActions } from "./popup-actions.browser.mjs";
 import { verifyCoordinatePicker } from "./coordinate-picker.browser.mjs";
 import { verifyMapErrors } from "./map-errors.browser.mjs";
+import { verifyToast } from "./toast.browser.mjs";
 
 // Reuse externally supplied Playwright tooling; no extra project dependency.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
@@ -28,11 +29,11 @@ try {
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
     args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
   });
-  for (const [name, verify] of [["coordinate-picker", verifyCoordinatePicker], ["marker-colors", verifyMarkerColors], ["branding", verifyBranding], ["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents], ["sidebar-polish", verifySidebarPolish], ["popup-actions", verifyPopupActions],
+  for (const [name, verify] of [["toast", verifyToast], ["coordinate-picker", verifyCoordinatePicker], ["marker-colors", verifyMarkerColors], ["branding", verifyBranding], ["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents], ["sidebar-polish", verifySidebarPolish], ["popup-actions", verifyPopupActions],
     ...["success", "construction-error", "initial-style-error"].map(mode => [`map-errors-${mode}`, (page, url) => verifyMapErrors(page, url, mode)])]) {
     const context = await browser.newContext({ hasTouch: name === "popup-actions" });
     try {
-      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", ["coordinate-picker", "marker-colors", "sidebar-polish", "popup-actions"].includes(name) ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
+      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", ["toast", "coordinate-picker", "marker-colors", "sidebar-polish", "popup-actions"].includes(name) ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
     } finally { await context.close(); }
   }
 } finally {
