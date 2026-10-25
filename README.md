@@ -340,7 +340,7 @@ to change the same four fields and **Save changes**. Choose **Delete** from that
 actions panel and review the capital/country in the confirmation,
 then choose **Delete capital**. **Cancel** or Escape closes either dialog without
 writing. While a request is pending, controls and dismissal are disabled to avoid
-duplicate submissions. Success appears briefly at the upper-right of the window.
+duplicate submissions. Success appears briefly at the bottom center of the window.
 
 **Pick on map** optionally fills latitude and longitude in both create and edit.
 The modal temporarily closes while keeping the draft; click the map to return
@@ -389,8 +389,8 @@ clamping; opening never changes row heights or scroll position. Scrolling, resiz
 filter changes and collapse close the panel.
 
 Confirmed create, update, delete and reset results appear as a small polite status
-at the upper-right edge for about four seconds, without shifting list content or
-taking focus. Starting another operation clears the previous notice; a new success
+at the bottom center of the viewport for about three seconds, without shifting
+list content or taking focus. Starting another operation clears the previous notice; a new success
 starts a fresh timer, which is also cleaned up on unmount. Errors remain visible
 in the existing dialog/retry flow until handled.
 

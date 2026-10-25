@@ -43,6 +43,21 @@ export async function verifyToast(page, baseURL, screenshotDirectory) {
   });
   const button = name => page.getByRole("button", { name, exact: true });
   const notice = page.locator(".mutation-notice");
+  const position = async (bottom = 24) => {
+    const geometry = await notice.evaluate(el => {
+      const r = el.getBoundingClientRect();
+      return { center: r.left + r.width / 2, expectedCenter: innerWidth / 2,
+        bottom: innerHeight - r.bottom, visible: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight,
+        overflow: document.documentElement.scrollWidth > innerWidth, fixed: getComputedStyle(el).position };
+    });
+    assert.ok(Math.abs(geometry.center - geometry.expectedCenter) < 0.5, "toast must be centered in the viewport");
+    assert.ok(Math.abs(geometry.bottom - bottom) < 0.5, "toast must clear the viewport edge, safe area and navigation");
+    assert.equal(geometry.visible, true);
+    assert.equal(geometry.overflow, false);
+    assert.equal(geometry.fixed, "fixed");
+  };
+  const layout = () => page.locator(".app-header, .layout, .list-content, .map-panel").evaluateAll(elements =>
+    elements.map(el => { const r = el.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; }));
   const focused = async locator => {
     await page.waitForFunction(el => document.activeElement === el, await locator.elementHandle());
   };
@@ -90,6 +105,7 @@ export async function verifyToast(page, baseURL, screenshotDirectory) {
       return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
         && !el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
     }), true);
+    await position();
   };
   const evidence = [];
   for (const [width, height] of [[1440, 900], [390, 844], [320, 568]]) {
@@ -149,9 +165,6 @@ export async function verifyToast(page, baseURL, screenshotDirectory) {
       await button("Reset capitals").click();
       await entrance("Default capitals restored. Marker colors reset to Teal.", duration, button("Reset to default"));
       assert.equal(writes.length, before + 4);
-      if (screenshotDirectory && reducedMotion === "no-preference") {
-        await page.screenshot({ path: `${screenshotDirectory}/toast-entrance-${width}.png` });
-      }
       await setNotice(""); await empty();
       fail = true;
       await button("Actions for Berlin").click();
@@ -162,9 +175,40 @@ export async function verifyToast(page, baseURL, screenshotDirectory) {
       assert.equal(await alert.evaluate(el => el.getAnimations().length), 0);
       await page.keyboard.press("Escape"); fail = false;
     }
+    // The viewport, not the sidebar/map or document scroll, anchors the toast.
+    for (const collapsed of [false, true]) {
+      if (collapsed) await button("Collapse sidebar").click();
+      for (const scroll of [0, 200]) {
+        await page.evaluate(y => window.scrollTo(0, y), scroll);
+        const before = await layout();
+        await setNotice("Default capitals restored. Marker colors reset to Teal.");
+        await position();
+        assert.deepEqual(await layout(), before, "showing a toast must not shift the layout");
+        await page.evaluate(() => window.toastAnimation.finish());
+        if (screenshotDirectory && scroll === 0) {
+          await page.screenshot({ path: `${screenshotDirectory}/toast-bottom-${width}-${collapsed ? "collapsed" : "expanded"}.png` });
+        }
+        await setNotice(""); await empty();
+        assert.deepEqual(await layout(), before, "dismissing a toast must not shift the layout");
+      }
+      // Emulate a home-indicator safe area plus a future 64px mobile tab bar.
+      // Navigation height excludes the safe area; no actual mobile UI is added.
+      const session = await page.context().newCDPSession(page);
+      await session.send("Emulation.setSafeAreaInsetsOverride", { insets: { bottom: 34 } });
+      await page.evaluate(() => document.documentElement.style.setProperty("--bottom-navigation-height", "64px"));
+      await setNotice("Capital updated.");
+      await position(24 + 34 + 64);
+      await setNotice(""); await empty();
+      await page.evaluate(() => document.documentElement.style.removeProperty("--bottom-navigation-height"));
+      await session.send("Emulation.setSafeAreaInsetsOverride", { insets: { bottom: 0 } });
+      await session.detach();
+    }
+    await button("Expand sidebar").click();
     // No re-entry during the running animation, after completion, or on focus/Tab.
     await page.getByRole("searchbox").focus();
+    const before = await layout();
     await setNotice("Capital created.");
+    assert.deepEqual(await layout(), before);
     const count = await page.evaluate(() => window.toastEntrances);
     await page.evaluate(() => { window.toastAnimation.currentTime = 20; });
     await setNotice("Capital updated.");
@@ -182,20 +226,21 @@ export async function verifyToast(page, baseURL, screenshotDirectory) {
     assert.equal(await page.evaluate(() => window.toastEntrances), count + 1);
     await page.evaluate(() => window.toastAnimation.finish());
     evidence.push({ width, height, durations: [160, 80], crudAndReset: true, opacityOnly: true,
-      liveRegionPreserved: true, noFocusOrPointerInterference: true, noReplacementReplay: true, fullyVisible: true });
+      liveRegionPreserved: true, noFocusOrPointerInterference: true, noReplacementReplay: true, fullyVisible: true,
+      bottomCentered: true, expandedAndCollapsed: true, scrollIndependent: true, safeAreaAndNavigation: true, noLayoutShift: true });
   }
   // Broad time margins with a controlled clock, not millisecond-precise waits.
   await page.clock.install();
   await setNotice(""); await setNotice("Capital created.");
-  await page.clock.fastForward(2500);
+  await page.clock.fastForward(2000);
   await setNotice("Capital updated.");
   await page.clock.fastForward(2000); // Past the old timer, before the replacement's timer.
   assert.equal(await notice.textContent(), "Capital updated.");
-  await page.clock.fastForward(1500);
+  await page.clock.fastForward(500);
   assert.equal(await notice.textContent(), "Capital updated.");
   await page.clock.fastForward(600);
   await page.waitForFunction(() => document.querySelector(".mutation-notice").textContent === "");
   await empty();
   assert.deepEqual(errors, []);
-  return { viewports: evidence, timerAndImmediateDismissal: true, failedWriteNoSuccess: true, mockedWrites: writes.length, pageErrors: errors };
+  return { viewports: evidence, threeSecondTimerAndImmediateDismissal: true, failedWriteNoSuccess: true, mockedWrites: writes.length, pageErrors: errors };
 }
