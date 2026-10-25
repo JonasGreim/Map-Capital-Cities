@@ -226,6 +226,22 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
     }));
     assert.deepEqual(geometry, { sameCanvas: true, sameMarkers: true, squareMarkers: true, overflow: false, listeners: 0 });
     evidence.push({ width, height, createEditCancelEscape: true, failedSaveDraft: true, panZoom: true, ...geometry });
+    if (width === 320) {
+      await button("Actions for Edited Berlin").click();
+      await button("Edit").click();
+      await start();
+      records = records.filter(capital => capital.id !== 1);
+      await page.evaluate(async () => {
+        const { useCapitalStore } = await import("/src/capital-store.ts");
+        await useCapitalStore.getState().fetchCapitals();
+      });
+      await ended();
+      assert.equal(await field("Capital name").inputValue(), "Edited Berlin");
+      assert.equal(await page.locator(".coordinate-preview").count(), 0);
+      assert.equal(writes.length, 3);
+      await button("Cancel").click();
+      await focused(button("Add capital"));
+    }
   }
   // Context loss cancels safely into the manual form, without an inert layer.
   await page.getByRole("searchbox").fill("Berlin");
@@ -277,5 +293,5 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
   assert.equal(writes.length, beforeManual + 1);
   assert.deepEqual(writes.at(-1), { method: "POST", input: { name: "Manual city", country: "Manual country", latitude: 0, longitude: -180 } });
   assert.deepEqual(errors, []);
-  return { viewports: evidence, contextLoss: true, reset: true, unmount: true, manualWithoutMap: true, errors };
+  return { viewports: evidence, externalRemovalDraft: true, contextLoss: true, reset: true, unmount: true, manualWithoutMap: true, errors };
 }

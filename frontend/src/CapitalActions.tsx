@@ -85,13 +85,15 @@ export function CapitalActions({ children }: { children: ReactNode }) {
   }, []);
   const createCapital = useCallback(() => { clearPick(); setActions(null); setNotice(""); setDialog({ kind: "edit" }); }, [clearPick]);
   useEffect(() => {
-    // A reset or externally removed edit target invalidates the whole action.
+    // A reset ends the action. An externally removed edit target clears picking
+    // but retains the existing editor/draft and its normal 404 recovery path.
     const unsubscribe = useCapitalStore.subscribe((state, previous) => {
-      if (state.resetVersion !== previous.resetVersion
-        || (dialog?.kind === "edit" && dialog.capital && !state.capitals.some(capital => capital.id === dialog.capital?.id))) closeDialog();
+      if (state.resetVersion !== previous.resetVersion) closeDialog();
+      else if (dialog?.kind === "edit" && dialog.capital
+        && !state.capitals.some(capital => capital.id === dialog.capital?.id)) cancelPick();
     });
     return unsubscribe;
-  }, [dialog, closeDialog]);
+  }, [dialog, closeDialog, cancelPick]);
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(""), 4000);
