@@ -38,10 +38,35 @@ export function capitalCamera(capital: Capital, height: number, popupHeight: num
 
 const coordinates = (capital: Capital) => `${capital.latitude.toFixed(4)}, ${capital.longitude.toFixed(4)}`;
 
+const locationIcon = '<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.5"/>';
+const factIcons = [
+  '<circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/>',
+  '<circle cx="9" cy="7" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 13a5 5 0 0 1 3 5v3"/>',
+  '<ellipse cx="9" cy="6" rx="6" ry="3"/><path d="M3 6v5c0 1.7 2.7 3 6 3M3 11v5c0 1.7 2.7 3 6 3"/><ellipse cx="16" cy="14" rx="5" ry="3"/><path d="M11 14v4c0 1.7 2.2 3 5 3s5-1.3 5-3v-4"/>',
+];
+
+function popupIcon(paths: string) {
+  const icon = document.createElement("span");
+  icon.className = "popup-icon";
+  icon.setAttribute("aria-hidden", "true");
+  // Only the static icon paths above enter markup; API content stays text.
+  icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">${paths}</svg>`;
+  return icon;
+}
+
+function updateCoordinates(element: HTMLParagraphElement, capital: Capital) {
+  const value = document.createElement("span");
+  value.textContent = coordinates(capital);
+  element.replaceChildren(popupIcon(locationIcon), value);
+  element.setAttribute("aria-label", `Latitude ${capital.latitude}, longitude ${capital.longitude}`);
+}
+
 function updateFacts(element: HTMLDListElement, capital: Capital) {
-  element.replaceChildren(...countryFacts(capital).flatMap(([label, value]) => {
+  element.replaceChildren(...countryFacts(capital).flatMap(([label, value], index) => {
     const term = document.createElement("dt");
-    term.textContent = label;
+    const text = document.createElement("span");
+    text.textContent = label;
+    term.append(popupIcon(factIcons[index]), text);
     const description = document.createElement("dd");
     description.textContent = value;
     return [term, description];
@@ -100,8 +125,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
     updateCountryFlag(flag, entry.capital.flagCode);
     const location = document.createElement("p");
     location.className = "popup-coordinates";
-    location.setAttribute("aria-label", `Latitude ${entry.capital.latitude}, longitude ${entry.capital.longitude}`);
-    location.textContent = coordinates(entry.capital);
+    updateCoordinates(location, entry.capital);
     const facts = document.createElement("dl");
     facts.className = "popup-facts";
     updateFacts(facts, entry.capital);
@@ -296,10 +320,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
         if (entry.country) entry.country.textContent = capital.country;
         if (entry.facts) updateFacts(entry.facts, capital);
         entry.actions?.setAttribute("aria-label", `Map actions for ${capital.name}`);
-        if (entry.coordinates) {
-          entry.coordinates.textContent = coordinates(capital);
-          entry.coordinates.setAttribute("aria-label", `Latitude ${capital.latitude}, longitude ${capital.longitude}`);
-        }
+        if (entry.coordinates) updateCoordinates(entry.coordinates, capital);
         if (active === entry && moved) navigate(entry);
       }
     },

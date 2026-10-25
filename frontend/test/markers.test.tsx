@@ -15,7 +15,9 @@ class Element extends EventTarget {
   attributes = new Map<string, string>();
   style = { backgroundColor: "" };
   className = "";
-  textContent = "";
+  private text = "";
+  get textContent(): string { return this.text + this.children.map(child => child.textContent).join(""); }
+  set textContent(value: string) { this.text = value; this.children = []; }
   src = "";
   alt = "";
   width = 0;

@@ -1,4 +1,4 @@
-/* global document, window, innerWidth, innerHeight, structuredClone, Event, KeyboardEvent, URL */
+/* global document, window, innerWidth, innerHeight, structuredClone, Event, KeyboardEvent, URL, getComputedStyle */
 import assert from "node:assert/strict";
 
 // Real Mapbox, native dialogs and pointer/keyboard interaction. All capital
@@ -105,6 +105,29 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       && popup.top >= map.top - 1 && popup.bottom <= map.bottom + 1
       && content.scrollWidth <= content.clientWidth;
   });
+  const popupLayout = () => page.evaluate(() => {
+    const title = document.querySelector(".capital-popup h2").getBoundingClientRect();
+    const country = document.querySelector(".popup-country").getBoundingClientRect();
+    const flag = document.querySelector(".capital-popup > .country-flag").getBoundingClientRect();
+    const trigger = document.querySelector(".popup-actions-trigger").getBoundingClientRect();
+    const close = document.querySelector(".mapboxgl-popup-close-button").getBoundingClientRect();
+    const icons = [...document.querySelectorAll(".popup-icon")];
+    const values = [...document.querySelectorAll(".popup-facts dd")].map(el => el.getBoundingClientRect());
+    return {
+      compactHeader: country.top - title.bottom >= 2 && country.top - title.bottom <= 4 && title.left === country.left,
+      centeredFlag: Math.abs((flag.top + flag.bottom) / 2 - (title.top + country.bottom) / 2) <= 1,
+      clearControls: Math.max(title.right, country.right) <= trigger.left && trigger.right <= close.left,
+      uniformDecorativeIcons: icons.length === 4 && icons.every(icon => {
+        const svg = icon.querySelector("svg"), bounds = svg.getBoundingClientRect();
+        return icon.getAttribute("aria-hidden") === "true" && svg.getAttribute("focusable") === "false"
+          && svg.getAttribute("aria-hidden") === "true" && bounds.width === 16 && bounds.height === 16
+          && getComputedStyle(svg).strokeWidth === "1.8px" && getComputedStyle(icon).color === "rgb(8, 125, 150)";
+      }),
+      alignedFacts: values.every(value => value.right === values[0].right)
+        && icons.every(icon => Math.abs(icon.getBoundingClientRect().left - icons[0].getBoundingClientRect().left) <= 1),
+    };
+  });
+  const expectedLayout = { compactHeader: true, centeredFlag: true, clearControls: true, uniformDecorativeIcons: true, alignedFacts: true };
   const evidence = [];
   for (const [width, height] of [[1440, 900], [390, 844], [320, 568]]) {
     for (const collapsed of [false, true]) {
@@ -140,6 +163,7 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       assert.equal(await page.locator(".popup-coordinates").textContent(), "52.5200, 13.4050");
       assert.match(await page.locator(".capital-popup .country-flag img").getAttribute("src"), /de.svg$/);
       assert.equal(await popupBounds(), true);
+      assert.deepEqual(await popupLayout(), expectedLayout);
       if (screenshotDirectory) await page.screenshot({ path: `${screenshotDirectory}/country-facts-${width}-${collapsed ? "collapsed" : "open"}.png` });
       await button("Purple marker").click();
       const before = await camera();
@@ -345,6 +369,7 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       await openMarker(3);
       assert.deepEqual(await facts(), ["Asia, Europe", "0", "An exceptionally long currency name that must wrap safely inside the small popup (EUR), JPY, US dollar (USD)"]);
       assert.equal(await popupBounds(), true);
+      assert.deepEqual(await popupLayout(), expectedLayout);
       assert.equal(await page.locator(".popup-facts dd").last().evaluate(el => el.getBoundingClientRect().height > 36), true);
       // Even when long text needs internal scrolling, every swatch and the
       // header action can be reached without horizontal overflow.
