@@ -4,6 +4,7 @@ import { createServer } from "vite";
 import { verifyFlags } from "./flags.browser.mjs";
 import { verifyMapSelection } from "./map-selection.browser.mjs";
 import { verifySidebar } from "./sidebar.browser.mjs";
+import { verifyContinents } from "./continents.browser.mjs";
 import { verifyReset } from "./reset.browser.mjs";
 
 // Reuse externally supplied Playwright tooling; no extra project dependency.
@@ -21,7 +22,7 @@ try {
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
     args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
   });
-  for (const [name, verify] of [["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset]]) {
+  for (const [name, verify] of [["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents]]) {
     const context = await browser.newContext();
     try {
       console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188")));

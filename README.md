@@ -77,7 +77,7 @@ required for the static checks above.
 ## Data
 
 ```json
-{ "id": 1, "name": "string", "latitude": 0.0, "longitude": 0.0, "country": "string", "flagCode": null }
+{ "id": 1, "name": "string", "latitude": 0.0, "longitude": 0.0, "country": "string", "flagCode": null, "continents": null }
 ```
 
 `db/schema.sql` creates `capitals` with an automatically generated integer ID,
@@ -183,13 +183,30 @@ POST and PUT require `Content-Type: application/json`.
 
 `flagCode` is read-only response metadata (`"DE"`, `"CZ"`, or `null`), derived from
 `names.common` and validated `codes.alpha_2` in **all pages** of the v5 startup
-import, including countries without valid capitals. The lookup stays in memory
-and is published only after a successful import transaction; no DB migration is
+import, including countries without valid capitals. The shared metadata lookup
+stays in memory and is published only after a successful import transaction; no DB migration is
 needed. Names match after trimming and lowercasing, without aliases or fuzzy
 matching. Conflicting or invalid metadata and unknown names resolve to `null`.
 GET list/name and successful POST/PUT derive the code from the record's current
 country, including existing and manually created rows. POST/PUT still accept
-**only** `name`, `country`, `latitude`, and `longitude`; sending `flagCode` is rejected.
+**only** `name`, `country`, `latitude`, and `longitude`; sending either metadata field is rejected.
+
+`continents` is read-only response metadata (`string[]` or `null`), from the v5
+[`continents` field](https://restcountries.com/docs/countries#field-reference),
+not `region` or coordinates. The existing normalized country-name lookup collects
+both fields across every startup page, including countries without capitals, and
+publishes them only after import commits. Verified on 25 October 2026 against 254
+live records: Africa, Antarctica, Asia, Europe, North America, Oceania and South
+America. North/South America remain separate. Multi-continent countries match each
+listed continent; no classification is inferred. Values are trimmed, matched
+case-insensitively, deduplicated and ordered by the supported labels. Missing,
+empty, unsupported, malformed or contradictory continent sets yield `null` for
+that country; duplicates with the same normalized set are accepted. Ambiguity is
+sticky across pages, independently of flag validity. GET/list/name, successful
+POST/PUT and reset decorate the record's **current country** from the same lookup.
+Reset immediately retains metadata; it needs no additional fetch or migration.
+The frontend validates optional metadata and treats unknown/invalid countries as
+unmapped. Metadata refreshes on backend restart.
 
 | Method | Path | Success response |
 | --- | --- | --- |
@@ -472,6 +489,21 @@ changes. The browser makes no additional country API request;
 country edits replace the flag after a successful save. Metadata refreshes only
 on backend restart, and flag images require CDN access.
 
+The native **Continent** dropdown beneath search defaults to **All continents**.
+Text search matches trimmed, case-insensitive capital/country names in the sidebar
+only. A continent filters both sidebar and map; the sidebar combines the two with
+AND. For example, Europe + Tokyo shows no list matches but keeps all European
+markers. The count shows matches out of the full dataset. Unknown countries stay
+visible under All continents and are excluded from specific continents. Clearing
+search and choosing All continents are independent actions, including after reset.
+
+Filters leave the canonical capital array and camera unchanged. Marker visibility
+is separate from data updates: hidden markers retain instances and colors, are
+disabled and leave the tab order. An excluded selection closes its popup without
+focusing a hidden marker. Country edits/new records/reloads reconcile visibility;
+actual deletion still releases markers, and reset retains its existing Teal policy.
+The Mapbox instance stays mounted throughout.
+
 ### Frontend verification
 
 `npm test -w frontend` covers the API contract and failures, request sharing,
@@ -549,11 +581,19 @@ drag inertia to finish before starting the next viewport scenario. Instrumented
 runs exposed flights starting with the previous canvas size (1088×805 inside a
 390×464 container); arbitrary delays and relaxed camera assertions are not used.
 
+`frontend/test/continents.browser.mjs` exercises the search/continent matrix,
+native select keyboard operation, excluded selection/focus, hidden-marker safety,
+marker identity/color restoration, collapse/expand, CRUD and reset with an active
+filter, stable camera/canvas, 32×32 markers and overflow at 1440×900, 390×844 and
+320×568. It is included in `frontend/test/run-browser.mjs`; every capital API
+request is mocked while Mapbox runs in a fresh Chromium context.
+
 ### Browser runner and CI prerequisite
 
 `frontend/test/run-browser.mjs` starts only Vite, awaits server readiness and runs
-the flag, selection, sidebar and reset suites in fresh Chromium contexts. Every
-capital read/write is mocked; no backend or database is started. It fails on missing
+the flag, selection, sidebar, reset and continent suites in fresh Chromium
+contexts. Every capital read/write is mocked; no backend or database is started.
+It fails on missing
 Mapbox configuration or test errors and closes the browser/server on exit.
 Use existing Playwright tooling via `PLAYWRIGHT_MODULE` (an absolute module path),
 or install a pinned copy outside the project, without changing its dependencies:

@@ -95,7 +95,7 @@ test("PostgreSQL schema, constraints, atomic import, CRUD API and health", {
       assert.equal(created.statusCode, 201);
       const capital = created.json<Capital>();
       assert.ok(Number.isInteger(capital.id));
-      assert.deepEqual(capital, { ...input, id: capital.id, name: "Test City's", country: "API Test Country", flagCode: null });
+      assert.deepEqual(capital, { ...input, id: capital.id, name: "Test City's", country: "API Test Country", flagCode: null, continents: null });
 
       const lookup = await app.inject({ method: "GET", url: `/capital/${encodeURIComponent("tEsT cItY'S")}` });
       assert.equal(lookup.statusCode, 200);
@@ -120,7 +120,7 @@ test("PostgreSQL schema, constraints, atomic import, CRUD API and health", {
       const replacement = { name: "Updated City", latitude: 90, longitude: -180, country: "Updated Country" };
       const updated = await app.inject({ method: "PUT", url: `/capital/${capital.id}`, payload: replacement });
       assert.equal(updated.statusCode, 200);
-      assert.deepEqual(updated.json(), { id: capital.id, ...replacement, flagCode: null });
+      assert.deepEqual(updated.json(), { id: capital.id, ...replacement, flagCode: null, continents: null });
       assert.equal((await app.inject({ method: "GET", url: `/capital/${encodeURIComponent("Test City's")}` })).statusCode, 404);
 
       const invalid = await app.inject({ method: "PUT", url: `/capital/${capital.id}`, payload: { ...replacement, latitude: 91 } });
@@ -145,24 +145,24 @@ test("PostgreSQL schema, constraints, atomic import, CRUD API and health", {
 
   await t.test("import metadata decorates preserved rows and manual CRUD without storing flags", async () => {
     const before = (await db.query("SELECT * FROM capitals ORDER BY id")).rows;
-    const { flagCodes } = await importCapitals(db, "mock-key", async () => Response.json({ data: { objects: [
-      { ...record("Berlin", "Germany"), codes: { alpha_2: "DE" } },
-      { names: { common: "Czechia" }, codes: { alpha_2: "CZ" }, capitals: [] },
-      { names: { common: "Antarctica" }, codes: { alpha_2: "AQ" }, capitals: [] },
+    const { metadata } = await importCapitals(db, "mock-key", async () => Response.json({ data: { objects: [
+      { ...record("Berlin", "Germany"), codes: { alpha_2: "DE" }, continents: ["Europe"] },
+      { names: { common: "Czechia" }, codes: { alpha_2: "CZ" }, continents: ["Europe"], capitals: [] },
+      { names: { common: "Antarctica" }, codes: { alpha_2: "AQ" }, continents: ["Antarctica"], capitals: [] },
     ] } }));
     assert.deepEqual((await db.query("SELECT * FROM capitals ORDER BY id")).rows, before);
-    const app = buildApp(db, flagCodes);
+    const app = buildApp(db, metadata);
     try {
       assert.equal((await app.inject({ method: "GET", url: "/capital/Berlin" })).json().flagCode, "DE");
       const input = { name: "Manual capital", country: "Czechia", latitude: 10, longitude: 20 };
       const created = await app.inject({ method: "POST", url: "/capital", payload: input });
       assert.equal(created.statusCode, 201);
       const capital = created.json<Capital>();
-      assert.deepEqual(created.json(), { ...input, id: capital.id, flagCode: "CZ" });
+      assert.deepEqual(created.json(), { ...input, id: capital.id, flagCode: "CZ", continents: ["Europe"] });
       for (const [country, flagCode] of [["Antarctica", "AQ"], ["Unknown", null]] as const) {
         const updated = await app.inject({ method: "PUT", url: `/capital/${capital.id}`, payload: { ...input, country } });
         assert.equal(updated.statusCode, 200);
-        assert.deepEqual(updated.json(), { ...input, country, id: capital.id, flagCode });
+        assert.deepEqual(updated.json(), { ...input, country, id: capital.id, flagCode, continents: country === "Antarctica" ? ["Antarctica"] : null });
         assert.deepEqual((await db.query("SELECT * FROM capitals WHERE id = $1", [capital.id])).rows[0], { ...input, country, id: capital.id });
       }
       assert.equal((await app.inject({ method: "DELETE", url: `/capital/${capital.id}` })).statusCode, 204);

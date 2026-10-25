@@ -1,3 +1,4 @@
+import { readContinents, type Continent } from "./continent-filter";
 import { flagUrl } from "./country-flag";
 
 export type CapitalInput = {
@@ -7,11 +8,13 @@ export type CapitalInput = {
   longitude: number;
 };
 
-export type Capital = CapitalInput & { id: number; flagCode?: string | null };
+export type Capital = CapitalInput & { id: number; flagCode?: string | null; continents?: Continent[] | null };
 
 function readMetadata(capital: Capital): Capital {
-  if (capital.flagCode === undefined) return capital;
-  return { ...capital, flagCode: flagUrl(capital.flagCode) ? capital.flagCode!.toUpperCase() : null };
+  return { ...capital,
+    ...(capital.flagCode !== undefined ? { flagCode: flagUrl(capital.flagCode) ? capital.flagCode!.toUpperCase() : null } : {}),
+    ...(capital.continents !== undefined ? { continents: readContinents(capital.continents) } : {}),
+  };
 }
 
 function isCapital(value: unknown): value is Capital {

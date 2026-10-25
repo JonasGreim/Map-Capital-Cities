@@ -22,7 +22,7 @@ test("GET /capital returns a plain array, including an empty database", async (t
     t.after(() => app.close());
     const response = await app.inject({ method: "GET", url: "/capital" });
     assert.equal(response.statusCode, 200);
-    assert.deepEqual(response.json(), rows.map(row => ({ ...row, flagCode: null })));
+    assert.deepEqual(response.json(), rows.map(row => ({ ...row, flagCode: null, continents: null })));
     assert.equal(queries.length, 1);
   }
 });
@@ -33,7 +33,7 @@ test("GET by name passes the literal name to a case-insensitive parameterized lo
   for (const name of ["bErLiN", "O'City; DROP TABLE capitals;--"]) {
     const response = await app.inject({ method: "GET", url: `/capital/${encodeURIComponent(name)}` });
     assert.equal(response.statusCode, 200);
-    assert.deepEqual(response.json(), { ...capital, flagCode: null });
+    assert.deepEqual(response.json(), { ...capital, flagCode: null, continents: null });
     assert.deepEqual(queries.at(-1)?.values, [name]);
     assert.match(queries.at(-1)!.sql, /lower\(name\) = lower\(\$1\)/);
     assert.equal(queries.at(-1)!.sql.includes(name), false);
@@ -45,7 +45,7 @@ test("POST generates its ID in SQL, trims text and returns the created object wi
   t.after(() => app.close());
   const response = await app.inject({ method: "POST", url: "/capital", payload: { ...input, name: " Berlin ", country: " Germany " } });
   assert.equal(response.statusCode, 201);
-  assert.deepEqual(response.json(), { ...capital, flagCode: null });
+  assert.deepEqual(response.json(), { ...capital, flagCode: null, continents: null });
   assert.deepEqual(queries[0].values, ["Berlin", 52.52, 13.405, "Germany"]);
   assert.match(queries[0].sql, /^INSERT INTO capitals \(name, latitude, longitude, country\)/);
 });
@@ -55,7 +55,7 @@ test("PUT performs a complete update and returns the object with 200", async (t)
   t.after(() => app.close());
   const response = await app.inject({ method: "PUT", url: "/capital/7", payload: input });
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json(), { ...capital, flagCode: null });
+  assert.deepEqual(response.json(), { ...capital, flagCode: null, continents: null });
   assert.deepEqual(queries[0].values, ["Berlin", 52.52, 13.405, "Germany", 7]);
   assert.match(queries[0].sql, /WHERE id = \$5 RETURNING/);
 });
@@ -184,7 +184,7 @@ test("unexpected database failures produce safe 500 responses for every endpoint
 test("all read/write responses derive flags from current countries, including existing and manual rows", async (t) => {
   let rows: Capital[] = [capital, { ...capital, id: 8, name: "Unknown city", country: "Unknown" },
     { ...capital, id: 9, name: "Ambiguous city", country: "Ambiguous" }];
-  const flagCodes = new Map<string, string | null>([["germany", "DE"], ["czechia", "CZ"], ["antarctica", "AQ"], ["ambiguous", null]]);
+  const metadata = new Map([["germany", { flagCode: "DE", continents: ["Europe"] }], ["czechia", { flagCode: "CZ", continents: ["Europe"] }], ["antarctica", { flagCode: "AQ", continents: ["Antarctica"] }], ["ambiguous", { flagCode: null, continents: null }], ["turkey", { flagCode: "TR", continents: ["Asia", "Europe"] }]]);
   const app = buildApp({ query: async (sql, values) => {
     if (sql.startsWith("INSERT")) {
       const [name, latitude, longitude, country] = values as [string, number, number, string];
@@ -199,19 +199,36 @@ test("all read/write responses derive flags from current countries, including ex
       return { rows: [row] };
     }
     return { rows: values ? rows.filter(row => row.name.toLowerCase() === String(values[0]).toLowerCase()) : rows };
-  } }, flagCodes);
+  } }, metadata);
   t.after(() => app.close());
   const list = await app.inject({ method: "GET", url: "/capital" });
   assert.deepEqual(list.json().map((row: { flagCode: string | null }) => row.flagCode), ["DE", null, null]);
+  assert.deepEqual(list.json().map((row: { continents: string[] | null }) => row.continents), [["Europe"], null, null]);
   const lookup = await app.inject({ method: "GET", url: "/capital/Berlin" });
-  assert.deepEqual(lookup.json(), { ...capital, flagCode: "DE" });
-  for (const [country, expected] of [[" GERMANY ", "DE"], ["Czechia", "CZ"], ["Antarctica", "AQ"], ["Unknown", null], ["Ambiguous", null]] as const) {
+  assert.deepEqual(lookup.json(), { ...capital, flagCode: "DE", continents: ["Europe"] });
+  for (const [country, expected] of [[" GERMANY ", "DE"], ["Czechia", "CZ"], ["Antarctica", "AQ"], ["Unknown", null], ["Ambiguous", null], ["Turkey", "TR"]] as const) {
     const created = await app.inject({ method: "POST", url: "/capital", payload: { ...input, country } });
     assert.equal(created.statusCode, 201);
     assert.equal(created.json().flagCode, expected);
+    assert.deepEqual(created.json().continents, metadata.get(country.trim().toLowerCase())?.continents ?? null);
     const updated = await app.inject({ method: "PUT", url: "/capital/7", payload: { ...input, country } });
     assert.equal(updated.statusCode, 200);
     assert.equal(updated.json().flagCode, expected);
-    assert.equal((await app.inject({ method: "GET", url: "/capital/Berlin" })).json().flagCode, expected);
+    assert.deepEqual(updated.json().continents, metadata.get(country.trim().toLowerCase())?.continents ?? null);
+    const read = (await app.inject({ method: "GET", url: "/capital/Berlin" })).json();
+    assert.equal(read.flagCode, expected);
+    assert.deepEqual(read.continents, metadata.get(country.trim().toLowerCase())?.continents ?? null);
   }
+});
+
+test("continents are read-only: POST and PUT still reject metadata before SQL", async (t) => {
+  const { app, queries } = fixture();
+  t.after(() => app.close());
+  for (const method of ["POST", "PUT"] as const) {
+    for (const continents of [null, [], ["Europe"]]) {
+      const response = await app.inject({ method, url: method === "POST" ? "/capital" : "/capital/7", payload: { ...input, continents } });
+      assert.equal(response.statusCode, 400);
+    }
+  }
+  assert.equal(queries.length, 0);
 });

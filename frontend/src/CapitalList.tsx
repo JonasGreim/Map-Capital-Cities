@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Capital } from "./api";
 import { useCapitalStore } from "./capital-store";
 import { CapitalForm } from "./CapitalForm";
 import { DeleteCapitalDialog } from "./DeleteCapitalDialog";
 import { CountryFlag } from "./CountryFlag";
 import { ResetCapitalsDialog } from "./ResetCapitalsDialog";
+import { continentNames, matchesContinent, type ContinentFilter } from "./continent-filter";
 
 type CapitalListProps = {
   capitals: Capital[];
@@ -14,16 +15,17 @@ type CapitalListProps = {
   collapsed?: boolean;
 };
 
-export function filterCapitals(capitals: Capital[], query: string) {
+export function filterCapitals(capitals: Capital[], query: string, continent: ContinentFilter = "") {
   const search = query.trim().toLowerCase();
-  return capitals.filter((capital) => capital.name.toLowerCase().includes(search) || capital.country.toLowerCase().includes(search));
+  return capitals.filter((capital) => matchesContinent(capital, continent)
+    && (capital.name.toLowerCase().includes(search) || capital.country.toLowerCase().includes(search)));
 }
 
 export function CapitalList({ capitals, loading, error, onRetry, collapsed = false }: CapitalListProps) {
   const results = useRef<HTMLDivElement>(null);
   const retryButton = useRef<HTMLButtonElement>(null);
   const retryPending = useRef(false);
-  const { mutating, saveCapital, removeCapital, resetCapitals, selectedCapitalId, selectionSource, selectionVersion, selectCapital } = useCapitalStore();
+  const { continent, setContinent, mutating, saveCapital, removeCapital, resetCapitals, selectedCapitalId, selectionSource, selectionVersion, selectCapital } = useCapitalStore();
   const selectedRow = useRef<HTMLButtonElement>(null);
   const [editor, setEditor] = useState<{ capital?: Capital } | null>(null);
   const [deleting, setDeleting] = useState<Capital | null>(null);
@@ -34,7 +36,7 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
   const actionsPanel = useRef<HTMLDivElement>(null);
   const actionsButton = useRef<HTMLButtonElement>(null);
   const firstAction = useRef<HTMLButtonElement>(null);
-  const filtered = filterCapitals(capitals, query);
+  const filtered = useMemo(() => filterCapitals(capitals, query, continent), [capitals, query, continent]);
 
   useEffect(() => {
     // Reveal only within the list's own scroller. Never move the page, steal
@@ -96,6 +98,14 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
         <input id="capital-search" type="search" placeholder="Search countries or capitals…" value={query}
           onChange={(event) => { setQuery(event.target.value); setActionsId(null); }} aria-describedby="search-results-count" />
       </div>
+      <div className="list-continent">
+        <label htmlFor="continent-filter">Continent</label>
+        <select id="continent-filter" value={continent} aria-describedby="search-results-count"
+          onChange={(event) => { setContinent(event.target.value as ContinentFilter); setActionsId(null); }}>
+          <option value="">All continents</option>
+          {continentNames.map(name => <option key={name} value={name}>{name}</option>)}
+        </select>
+      </div>
       <div className="list-actions">
         <button id="add-capital" type="button" disabled={loading || mutating || !!error} onClick={() => { setNotice(""); setEditor({}); }}><span aria-hidden="true">＋</span> Add capital</button>
         <button id="reset-capitals" type="button" className="secondary" disabled={loading || mutating || !!error}
@@ -103,7 +113,7 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
       </div>
       <a className="skip-to-map" href="#world-map">Skip to map</a>
       <p className="mutation-notice" role="status">{notice}</p>
-      <p id="search-results-count" className={query.trim() ? "search-results-count" : "visually-hidden"} role="status">
+      <p id="search-results-count" className={query.trim() || continent ? "search-results-count" : "visually-hidden"} role="status">
         {!loading && !error ? `${filtered.length} of ${capitals.length} ${capitals.length === 1 ? "capital" : "capitals"}` : ""}
       </p>
       <div ref={results} className="list-content" role="region" aria-label="Capital results" aria-busy={loading} tabIndex={0}>
@@ -117,7 +127,7 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
         ) : capitals.length === 0 ? (
           <p className="state-message" role="status">No capitals available yet.</p>
         ) : filtered.length === 0 ? (
-          <p className="state-message">No matching capitals. Try another capital or country.</p>
+          <p className="state-message">No matching capitals. Try another search or continent.</p>
         ) : (
           <ul className="capital-list">
             {filtered.map((capital) => (

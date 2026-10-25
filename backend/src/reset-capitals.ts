@@ -1,7 +1,7 @@
 import type { FastifyError, FastifyInstance } from "fastify";
 import { capitalStore, type CapitalDatabase } from "./capitals.js";
 import { defaultCapitals } from "./default-capitals.js";
-import { countryFlagCode } from "./import-capitals.js";
+import { countryMetadata, type CountryMetadataLookup } from "./import-capitals.js";
 
 export async function resetCapitals(database: CapitalDatabase) {
   if (!database.connect) throw new Error("Reset requires a transactional database");
@@ -27,7 +27,7 @@ export async function resetCapitals(database: CapitalDatabase) {
 }
 
 // Public demo operation, explicitly approved in #19. Confirmation is not auth.
-export function resetRoutes(app: FastifyInstance, database: CapitalDatabase, flagCodes: ReadonlyMap<string, string | null>) {
+export function resetRoutes(app: FastifyInstance, database: CapitalDatabase, metadata: CountryMetadataLookup) {
   let pending = false;
   app.setErrorHandler<FastifyError>((error, _request, reply) => {
     if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
@@ -48,7 +48,7 @@ export function resetRoutes(app: FastifyInstance, database: CapitalDatabase, fla
     pending = true;
     try {
       const capitals = await resetCapitals(database);
-      return capitals.map(capital => ({ ...capital, flagCode: countryFlagCode(flagCodes, capital.country) }));
+      return capitals.map(capital => ({ ...capital, ...countryMetadata(metadata, capital.country) }));
     } finally { pending = false; }
   });
 }
