@@ -171,6 +171,14 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
   }
 
   return {
+    reset() {
+      map.stop();
+      active?.disposePopup?.(false, false);
+      for (const entry of entries.values()) {
+        entry.color = markerColors[0].value;
+        entry.button.style.backgroundColor = entry.color;
+      }
+    },
     select(id: number | null, fromList = false) {
       if (id === null) { active?.disposePopup?.(false, false); return; }
       const entry = entries.get(id);

@@ -313,7 +313,7 @@ original database ID. Duplicate capital names (case-insensitive) or countries
 (exact match), missing records, invalid requests and server/network failures show
 safe messages inside the dialog and retain entered values. Requests time out after
 15 seconds. A lost/malformed response can leave a write's outcome uncertain:
-cancel and use **Refresh list** before retrying. No server internals are displayed.
+cancel and reload the page before retrying. No server internals are displayed.
 
 The typed client reuses the existing POST/PUT/DELETE endpoints (including DELETE's
 empty 204 response). After each confirmed write, Zustand applies the returned
@@ -332,7 +332,78 @@ focus to the three-dot button, and leaving the row or clicking outside closes th
 **Persistence limitation:** CRUD writes are stored in PostgreSQL, but REST Countries
 is reimported on **every backend startup**. Deleted imported capitals can reappear
 after a restart; editing both unique names can also allow the original to return.
-This feature does not change the import policy or add a reset/reseed action.
+Reset to default, described below, is separate from this unchanged import policy.
+
+### Reset to default
+
+Choose **Reset to default**, directly beside **Add capital**, and review the
+confirmation before choosing **Reset capitals**. **Cancel** or Escape before
+submission writes nothing. During the request, dismissal and duplicate submission
+are disabled; progress, success and safe errors are announced. Focus starts on
+Cancel and returns to Reset to default after closing.
+
+Reset replaces **all rows in capitals**, including manually created rows, with
+the reviewed `default-v1` source dataset in `db/default-capitals.json`:
+
+- Restore default capital names, countries, latitude and longitude.
+- Recreate deleted default capitals and delete all manually added capitals.
+- Generate new database IDs without restarting the identity sequence; clear the
+  selection and popup. Gaps after a failed transaction are harmless.
+- Reset all marker colors in the current session to **Teal #216278**. Keep the
+  Mapbox instance, canvas, current camera, search and sidebar state; markers
+  themselves are replaced because their IDs change. Markers remain 32×32 px.
+
+The snapshot was captured on **25 October 2026** from all three pages of REST
+Countries v5: 254 country records, five without a valid first capital, and 248
+stored capitals. Two valid capitals share the unique name Kingston: Jamaica's
+first occurrence is retained; Norfolk Island's duplicate is explicitly recorded
+in the snapshot metadata, matching the startup import's conflict policy.
+Only the four editable fields are frozen, with no IDs or credentials. Snapshot
+SHA-256: `f27e2cb2f64a5ebbf8574c56e14628f6ddd477e8150bd6e9ff73727686d03fa4`.
+The historical first import cannot be reconstructed from edited existing rows;
+`default-v1` is the approved definition of default. Updating it requires an
+explicit reviewed source-data change, never a fresh fetch during reset.
+
+`POST /capital-reset` requires JSON `{ "confirm": true }` and returns HTTP 200
+with the complete restored capital array, enriched with existing flag metadata.
+The existing five CRUD endpoints and DB-backed `/health` retain their contracts.
+One checked-out pg client performs BEGIN, a table write lock, DELETE, parameterized
+INSERTs, result selection and COMMIT. A failure rolls back the transaction and
+returns a safe error; success is reported only after COMMIT. Lock/statement
+timeouts bound blocked queries. Concurrent resets in the same backend process
+return 409; database locks serialize other writers/processes. New writes after
+commit remain possible. A deliberately repeated reset is another full replacement
+with new IDs; there is no request-ID or persistent deduplication mechanism.
+
+**Public demo limitation, explicitly accepted for this take-home:** this endpoint
+has **no authentication or token**. Anyone who can reach the API, including any
+visitor to a public demo, can replace everyone's capital data and delete custom
+entries. The dialog and `confirm` field prevent accidental UI actions; they are
+not authorization. There are no localhost/origin restrictions or automatic
+backups. Use this application only with disposable demo data, not valuable user
+data. This accepted design supersedes the earlier local-only proposal in #19.
+
+Zustand applies only the confirmed response. No optimistic reset or automatic
+POST retry occurs. A timeout, dropped connection or malformed response can leave
+the commit outcome uncertain: the dialog offers **Reload current data**, a plain
+GET, without another reset or a success claim. Close and confirm a new reset only
+after reviewing the current state. If that read fails, Cancel and use the existing
+**Try again** list recovery. The normal sidebar has no Refresh list button;
+automatic initial loading, store reads and browser reload still work.
+
+Reset itself needs no REST Countries network request. Startup still imports live
+data and fails if REST Countries is unavailable; later restarts may supplement
+the frozen dataset with new API records. Other browser sessions receive no push
+and retain their current view/colors until they reload data; new IDs then replace
+their old markers. Reset does not change the map view or store colors in the DB.
+
+Reset route/store/marker tests use mocks. The optional reset PostgreSQL suite uses
+only explicit `TEST_DATABASE_URL`, its own temporary schema and the disposable
+database described above. Never run reset tests against the normal development
+database. `frontend/test/reset.browser.mjs` covers confirmation, Cancel, focus,
+pending/double-click protection, failures, lost-response/read recovery, Teal,
+selection/popup clearing, retained canvas/camera and 32×32 px markers at
+1440×900, 390×844 and 320×568, using mocked capital traffic and real Mapbox.
 
 Focused Node tests cover mutation HTTP contracts/errors, required/bounded fields,
 pending requests and shared-state updates. Interactive cancellation, focus,
@@ -389,7 +460,7 @@ Markers can overlap at world zoom levels; zoom in to distinguish nearby capitals
 or select a capital from the list or keyboard. No clustering or positional offsets
 are applied. Mapbox's globe projection can hide capitals on the far side; drag the
 map or select a list row to reach them. Map tiles require a working Mapbox token
-and network. City photos and Reset to default remain outside this phase.
+and network. City photos remain outside this phase.
 
 The list and selected popup show decorative 40 × 30px country flags from the
 [official flag CDN](https://restcountries.com/flags), using only validated alpha-2
@@ -481,7 +552,7 @@ runs exposed flights starting with the previous canvas size (1088×805 inside a
 ### Browser runner and CI prerequisite
 
 `frontend/test/run-browser.mjs` starts only Vite, awaits server readiness and runs
-the existing flag, selection and sidebar suites in fresh Chromium contexts. Every
+the flag, selection, sidebar and reset suites in fresh Chromium contexts. Every
 capital read/write is mocked; no backend or database is started. It fails on missing
 Mapbox configuration or test errors and closes the browser/server on exit.
 Use existing Playwright tooling via `PLAYWRIGHT_MODULE` (an absolute module path),

@@ -4,6 +4,7 @@ import { useCapitalStore } from "./capital-store";
 import { CapitalForm } from "./CapitalForm";
 import { DeleteCapitalDialog } from "./DeleteCapitalDialog";
 import { CountryFlag } from "./CountryFlag";
+import { ResetCapitalsDialog } from "./ResetCapitalsDialog";
 
 type CapitalListProps = {
   capitals: Capital[];
@@ -22,10 +23,11 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
   const results = useRef<HTMLDivElement>(null);
   const retryButton = useRef<HTMLButtonElement>(null);
   const retryPending = useRef(false);
-  const { mutating, saveCapital, removeCapital, selectedCapitalId, selectionSource, selectionVersion, selectCapital } = useCapitalStore();
+  const { mutating, saveCapital, removeCapital, resetCapitals, selectedCapitalId, selectionSource, selectionVersion, selectCapital } = useCapitalStore();
   const selectedRow = useRef<HTMLButtonElement>(null);
   const [editor, setEditor] = useState<{ capital?: Capital } | null>(null);
   const [deleting, setDeleting] = useState<Capital | null>(null);
+  const [resetting, setResetting] = useState(false);
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
   const [actionsId, setActionsId] = useState<number | null>(null);
@@ -96,7 +98,8 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
       </div>
       <div className="list-actions">
         <button id="add-capital" type="button" disabled={loading || mutating || !!error} onClick={() => { setNotice(""); setEditor({}); }}><span aria-hidden="true">＋</span> Add capital</button>
-        <button type="button" className="secondary" disabled={loading || mutating} onClick={retry}>Refresh list</button>
+        <button id="reset-capitals" type="button" className="secondary" disabled={loading || mutating || !!error}
+          onClick={() => { setNotice(""); setActionsId(null); setResetting(true); }}>Reset to default</button>
       </div>
       <a className="skip-to-map" href="#world-map">Skip to map</a>
       <p className="mutation-notice" role="status">{notice}</p>
@@ -150,6 +153,17 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
       {deleting && <DeleteCapitalDialog capital={deleting} onCancel={() => setDeleting(null)} onDelete={async (id) => {
         await removeCapital(id);
         setNotice("Capital deleted.");
+      }} />}
+      {resetting && <ResetCapitalsDialog onCancel={() => {
+        setResetting(false);
+        if (error) requestAnimationFrame(() => retryButton.current?.focus());
+      }} onReset={async () => {
+        await resetCapitals();
+        setNotice("Default capitals restored. Marker colors reset to Teal.");
+      }} onReload={async () => {
+        await onRetry();
+        const failure = useCapitalStore.getState().error;
+        if (failure) throw new Error(failure);
       }} />}
     </aside>
   );

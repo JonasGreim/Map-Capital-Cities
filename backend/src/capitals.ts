@@ -1,8 +1,11 @@
 export type CapitalInput = { name: string; latitude: number; longitude: number; country: string };
 export type Capital = CapitalInput & { id: number };
 export type CapitalResponse = Capital & { flagCode: string | null };
-export type CapitalDatabase = {
+type CapitalQueries = {
   query(sql: string, values?: unknown[]): Promise<{ rows: Capital[] }>;
+};
+export type CapitalDatabase = CapitalQueries & {
+  connect?: () => Promise<CapitalQueries & { release(error?: boolean): void }>;
 };
 
 const fields = "id, name, latitude, longitude, country";

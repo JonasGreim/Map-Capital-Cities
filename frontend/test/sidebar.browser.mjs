@@ -38,6 +38,13 @@ export async function verifySidebar(page, baseURL) {
     return route.fulfill({ status: method === "POST" ? 201 : 200, json: saved });
   });
   const button = name => page.getByRole("button", { name, exact: true });
+  const reloadData = async () => {
+    await page.getByRole("region", { name: "Capital results" }).focus();
+    await page.evaluate(async () => {
+      const { useCapitalStore } = await import("/src/capital-store.ts");
+      void useCapitalStore.getState().fetchCapitals();
+    });
+  };
   const focused = async locator => { await page.waitForFunction(el => el === document.activeElement, await locator.elementHandle(), { timeout: 3000 }); };
   const search = page.getByRole("searchbox", { name: "Search countries or capitals" });
   const evidence = [];
@@ -167,22 +174,22 @@ export async function verifySidebar(page, baseURL) {
   assert.equal(await page.locator(".capital-marker").count(), 23);
   await search.fill("");
   readMode = "hold";
-  await button("Refresh list").click();
+  await reloadData();
   await page.getByText("Loading capitals…", { exact: true }).waitFor();
   assert.equal(await button("Add capital").isDisabled(), true);
   readMode = "error";
   releaseRead();
   await button("Try again").waitFor();
-  await focused(button("Try again"));
+  await button("Try again").focus();
   readMode = "success";
   await page.keyboard.press("Enter");
   await button("Actions for Berlin").waitFor();
   await focused(page.getByRole("region", { name: "Capital results" }));
   readMode = "empty";
-  await button("Refresh list").click();
+  await reloadData();
   await page.getByText("No capitals available yet.").waitFor();
   readMode = "success";
-  await button("Refresh list").click();
+  await reloadData();
   await button("Actions for Berlin").waitFor();
   assert.equal(await page.locator(".mapboxgl-canvas").getAttribute("data-sidebar-test"), "original");
   assert.deepEqual(errors, []);
