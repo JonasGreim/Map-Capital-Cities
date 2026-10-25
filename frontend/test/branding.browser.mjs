@@ -1,5 +1,6 @@
 /* global document, DOMParser, getComputedStyle, Image, fetch, URL */
 import assert from "node:assert/strict";
+import { showView, viewButton } from "./view-helpers.mjs";
 
 // Runs against both Vite dev and production preview without a database.
 export async function verifyBranding(page, baseURL, screenshotDirectory) {
@@ -11,7 +12,7 @@ export async function verifyBranding(page, baseURL, screenshotDirectory) {
   });
   const brand = page.getByRole("link", { name: "Map Capital Cities – Home", exact: true });
   const globe = brand.locator("svg");
-  const search = page.getByRole("searchbox");
+  const search = page.getByRole("searchbox", { includeHidden: true });
   const title = async () => assert.equal(await page.title(), "Map Capital Cities");
   const transform = () => globe.evaluate(el => getComputedStyle(el).transform);
   const geometry = () => page.locator(".app-header h1, .app-header p, .layout, .brand-link").evaluateAll(elements =>
@@ -65,22 +66,22 @@ export async function verifyBranding(page, baseURL, screenshotDirectory) {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
     evidence.push({ width, height, hover: true, keyboardFocus: true, reducedMotion: true, overflow: false });
 
-    await search.fill("no matching capital");
-    await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
+    await showView(page, "Capitals"); await search.fill("no matching capital");
+    await viewButton(page, "Collapse sidebar").click();
     await brand.focus();
     await Promise.all([page.waitForEvent("load"), page.keyboard.press("Enter")]);
-    await search.waitFor();
+    await showView(page, "Capitals"); await search.waitFor();
     assert.equal(new URL(page.url()).pathname, "/");
     assert.equal(await search.inputValue(), "");
-    await page.getByRole("button", { name: "Collapse sidebar", exact: true }).waitFor();
+    await viewButton(page, "Collapse sidebar").waitFor();
     await title();
-    await search.fill("Berlin");
+    await showView(page, "Capitals"); await search.fill("Berlin");
     await Promise.all([page.waitForEvent("load"), globe.click()]);
-    await search.waitFor();
+    await showView(page, "Capitals"); await search.waitFor();
     assert.equal(await search.inputValue(), "");
     await title();
     await page.reload();
-    await search.waitFor();
+    await showView(page, "Capitals"); await search.waitFor();
     await title();
   }
   assert.deepEqual(writes, [], "home navigation must never write capital data");

@@ -1,5 +1,6 @@
 /* global document, window, innerWidth, innerHeight, getComputedStyle, KeyboardEvent, Event, structuredClone */
 import assert from "node:assert/strict";
+import { showView, viewButton } from "./view-helpers.mjs";
 
 // Focused Issue #26 coverage. Every capital request is intercepted, including
 // reset; only the real Mapbox resources use the network.
@@ -50,8 +51,8 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
     assert.ok(source.includes(root));
     await route.fulfill({ response, body: source.replace(root, `(window.polishRoot = ${root})`) });
   });
-  const button = name => page.getByRole("button", { name, exact: true });
-  const search = page.getByRole("searchbox");
+  const button = name => viewButton(page, name);
+  const search = page.getByRole("searchbox", { includeHidden: true });
   const scroller = page.locator(".list-content");
   const menu = page.locator(".capital-actions-menu");
   const notice = page.locator(".mutation-notice");
@@ -60,26 +61,32 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
   const listGeometry = () => page.evaluate(() => ({ scroll: document.querySelector(".list-content").scrollTop, page: window.scrollY,
     rows: [...document.querySelectorAll(".capital-list li")].map(el => { const r = el.getBoundingClientRect(); return [r.top, r.height]; }) }));
   const activateMarker = async id => {
-    await page.locator(`.capital-marker`).nth(id - 1).evaluate(el => el.click());
-    await focus(button("Teal marker"));
+    await showView(page, "Map");
+    const marker = page.locator(".capital-marker").nth(id - 1);
+    const alreadyOpen = await marker.getAttribute("aria-expanded") === "true";
+    await marker.evaluate(el => el.click());
+    if (!alreadyOpen) await focus(button("Teal marker"));
+    else assert.equal(await button("Teal marker").isVisible(), true);
   };
-  const centered = async () => assert.equal(await scroller.evaluate(el => {
+  const centered = async () => { await showView(page, "Capitals"); assert.equal(await scroller.evaluate(el => {
     const row = el.querySelector("li[data-selected] .capital-label").getBoundingClientRect();
     const bounds = el.getBoundingClientRect();
     const ideal = el.scrollTop + row.top - bounds.top - el.clientTop + row.height / 2 - el.clientHeight / 2;
     return Math.abs(el.scrollTop - Math.max(0, Math.min(ideal, el.scrollHeight - el.clientHeight))) <= 1;
-  }), true);
+  }), true); };
   const evidence = [];
   await page.goto(baseURL);
-  await button("Actions for Berlin").waitFor();
+  await showView(page, "Capitals"); await button("Actions for Berlin").waitFor();
   await page.waitForFunction(() => window.polishMap?.isStyleLoaded());
   await page.emulateMedia({ reducedMotion: "reduce" });
   for (const [width, height] of [[1440, 900], [390, 844], [320, 568]]) {
     await page.setViewportSize({ width, height });
+    await showView(page, "Map");
     await page.waitForFunction(() => {
       const map = document.querySelector(".map"), canvas = document.querySelector(".mapboxgl-canvas");
       return map.clientWidth === canvas.clientWidth && map.clientHeight === canvas.clientHeight && !window.polishMap.isMoving();
     });
+    await showView(page, "Capitals");
     await scroller.evaluate(el => { el.scrollTop = 0; });
     await page.evaluate(() => window.scrollTo(0, 0));
     const lastVisibleId = await scroller.evaluate(el => {
@@ -110,7 +117,7 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
       await focus(trigger);
     }
     await button("Actions for Berlin").scrollIntoViewIfNeeded();
-    await button("Actions for Berlin").focus();
+    await showView(page, "Capitals"); await button("Actions for Berlin").focus();
     await page.keyboard.press("Space");
     await page.keyboard.press("Shift+Tab");
     await focus(button("Actions for Berlin"));
@@ -120,28 +127,28 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
     await page.keyboard.press("Tab");
     await focus(button("Show Capital 1, Country 1 on map"));
     assert.equal(await menu.count(), 0);
-    await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
     await page.getByRole("heading", { name: "Countries & capitals" }).click();
     assert.equal(await menu.count(), 0);
-    await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
     await scroller.evaluate(el => { el.scrollTop += 30; });
     await menu.waitFor({ state: "hidden" });
-    await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
     await page.setViewportSize({ width: width + 1, height });
     await menu.waitFor({ state: "hidden" });
     await page.setViewportSize({ width, height });
-    await button("Actions for Berlin").click();
-    await page.getByLabel("Continent", { exact: true }).selectOption("Asia");
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("Asia");
     assert.equal(await menu.count(), 0);
-    await page.getByLabel("Continent", { exact: true }).selectOption("");
-    await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("");
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
     await button("Collapse sidebar").click();
     assert.equal(await menu.count(), 0);
     await button("Expand sidebar").click();
     assert.equal(await menu.count(), 0);
     // Establish a view with enough room for even the longest popup. Existing
     // Mapbox popup fitting may navigate at world zoom; sidebar reveal must not.
-    await button(`Show ${defaults.at(-1).name}, ${defaults.at(-1).country} on map`).click();
+    await showView(page, "Capitals"); await button(`Show ${defaults.at(-1).name}, ${defaults.at(-1).country} on map`).click();
     await page.waitForFunction(() => !window.polishMap.isMoving());
     await page.keyboard.press("Escape");
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -161,16 +168,17 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
       useCapitalStore.setState({ capitals: [...useCapitalStore.getState().capitals] });
     });
     assert.equal(await scroller.evaluate(el => el.scrollTop), 12);
-    await search.fill("Berlin");
+    await showView(page, "Capitals"); await search.fill("Berlin");
     await activateMarker(16);
     assert.equal(await search.inputValue(), "Berlin");
     assert.equal(await page.locator("li[data-selected]").count(), 0);
     await button("Collapse sidebar").click();
-    await button("Teal marker").focus();
+    await showView(page, "Map"); await button("Teal marker").focus();
     await activateMarker(16);
     assert.equal(await page.locator("#capital-sidebar").isVisible(), false);
     await button("Expand sidebar").click();
-    await page.getByLabel("Continent", { exact: true }).selectOption("Europe");
+    await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("Europe");
+    await showView(page, "Map");
     // Resizing the map may still fit the taller popup through ResizeObserver.
     // Finish that existing layout work before measuring search-only behavior.
     await page.waitForFunction(() => {
@@ -179,6 +187,7 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
         && map.getCanvas().clientHeight === map.getContainer().clientHeight;
     });
     const filteredView = await camera();
+    await showView(page, "Capitals");
     const markerState = await page.locator(".capital-marker").evaluateAll(elements => elements.map(el => [el.hidden, el.getAttribute("aria-pressed"), el.style.backgroundColor]));
     assert.equal(await button("Clear search").count(), 1);
     await button("Clear search").click();
@@ -186,7 +195,7 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
     assert.equal(await search.inputValue(), "");
     assert.equal(await button("Clear search").count(), 0);
     assert.equal(await page.locator(".capital-list li").count(), 30);
-    await search.fill("  ");
+    await showView(page, "Capitals"); await search.fill("  ");
     await page.keyboard.press("Tab");
     await focus(button("Clear search"));
     await page.keyboard.press("Enter");
@@ -195,14 +204,14 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
     assert.equal(await page.getByLabel("Continent", { exact: true }).inputValue(), "Europe");
     assert.deepEqual(await camera(), filteredView);
     assert.deepEqual(await page.locator(".capital-marker").evaluateAll(elements => elements.map(el => [el.hidden, el.getAttribute("aria-pressed"), el.style.backgroundColor])), markerState);
-    await page.getByLabel("Continent", { exact: true }).selectOption("");
+    await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("");
     // Menus/dialogs never request list-to-map navigation.
     const beforeActions = await camera();
-    await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
     await button("Edit").click();
     await page.keyboard.press("Escape");
     await focus(button("Actions for Berlin"));
-    await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
     await button("Delete").click();
     await button("Cancel").click();
     await focus(button("Actions for Berlin"));
@@ -240,7 +249,7 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
       await page.getByLabel(label, { exact: true }).fill(value);
     }
   };
-  await button("Add capital").click();
+  await showView(page, "Capitals"); await button("Add capital").click();
   await fillForm("New capital");
   const beforeCreate = await scroller.boundingBox();
   await button("Create capital").click();
@@ -249,7 +258,7 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
   assert.deepEqual(await scroller.boundingBox(), beforeCreate);
   await focus(button("Add capital"));
   await page.clock.fastForward(2500);
-  await button("Actions for Berlin").click();
+  await showView(page, "Capitals"); await button("Actions for Berlin").click();
   await button("Edit").click();
   assert.equal(await notice.textContent(), "");
   await button("Save changes").click();
@@ -261,7 +270,7 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
   assert.equal(await notice.textContent(), "Capital updated.");
   await page.clock.fastForward(600);
   assert.equal(await notice.textContent(), "");
-  await button("Actions for New capital").click();
+  await showView(page, "Capitals"); await button("Actions for New capital").click();
   await button("Delete").click();
   await button("Delete capital").click();
   await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
@@ -271,7 +280,7 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
   for (const [width, height] of [[1440, 900], [390, 844], [320, 568]]) {
     await page.setViewportSize({ width, height });
     await page.evaluate(() => window.scrollTo(0, 0));
-    await button("Reset to default").click();
+    await showView(page, "Capitals"); await button("Reset to default").click();
     const beforeReset = await scroller.boundingBox();
     await button("Reset capitals").click();
     await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
@@ -283,7 +292,7 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
       const r = el.getBoundingClientRect();
       return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
         && Math.abs(r.left + r.width / 2 - innerWidth / 2) < 1
-        && Math.abs(innerHeight - r.bottom - 24) < 1
+        && Math.abs(innerHeight - r.bottom - 24 - document.querySelector(".mobile-navigation").getBoundingClientRect().height) < 1
         && getComputedStyle(el).pointerEvents === "none";
     }), true);
     if (screenshotDirectory) await page.screenshot({ path: `${screenshotDirectory}/toast-${width}.png`, fullPage: true });
@@ -291,7 +300,7 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
     assert.equal(await notice.textContent(), "");
   }
   failWrite = true;
-  await button("Actions for Berlin").click();
+  await showView(page, "Capitals"); await button("Actions for Berlin").click();
   await button("Edit").click();
   await button("Save changes").click();
   const alert = page.getByRole("alert");
@@ -301,11 +310,11 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
   assert.equal(await notice.textContent(), "");
   await button("Cancel").click();
   failWrite = false;
-  await button("Reset to default").click();
+  await showView(page, "Capitals"); await button("Reset to default").click();
   await button("Reset capitals").click();
   await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
   assert.equal(await page.evaluate(() => window.noticeTimers.size), 1);
-  await button("Actions for Berlin").click();
+  await showView(page, "Capitals"); await button("Actions for Berlin").click();
   assert.equal(await page.evaluate(() => window.menuListeners.size), 5);
   await page.evaluate(() => window.polishRoot.unmount());
   assert.equal(await page.evaluate(() => window.menuListeners.size), 0);

@@ -1,5 +1,6 @@
 /* global document, window, performance, innerWidth, getComputedStyle */
 import assert from "node:assert/strict";
+import { showView, viewButton } from "./view-helpers.mjs";
 
 // Run with a fresh isolated Playwright Page and a real Mapbox token/network.
 // Only capital API traffic is mocked; no development DB is read or modified.
@@ -39,11 +40,11 @@ export async function verifyMapSelection(page, baseURL, screenshotDirectory) {
     window.selectionCanvas = document.querySelector(".mapboxgl-canvas");
     window.originalMarkers = [...document.querySelectorAll(".capital-marker")];
   });
-  const button = name => page.getByRole("button", { name, exact: true });
+  const button = name => viewButton(page, name);
   const row = name => button(`Show ${name}, ${name === "Berlin" ? "Germany" : "Czechia"} on map`);
   const marker = name => button(`${name}, ${name === "Berlin" ? "Germany" : "Czechia"}: change marker color`);
   const popup = name => page.getByRole("dialog", { name: `${name}, ${name === "Berlin" ? "Germany" : "Czechia"}: marker color`, exact: true });
-  const search = page.getByRole("searchbox");
+  const search = page.getByRole("searchbox", { includeHidden: true });
   const focused = async locator => { assert.equal(await locator.evaluate(el => el === document.activeElement), true); };
   const settled = async () => { await page.waitForFunction(() => window.selectionMap && !window.selectionMap.isMoving()); };
   const countFlights = () => page.evaluate(() => window.selectionFlights.length);
@@ -59,8 +60,8 @@ export async function verifyMapSelection(page, baseURL, screenshotDirectory) {
         && (!window.selectionMap || !window.selectionMap.isMoving());
     });
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    await search.fill("Prague");
-    await row("Prague").focus();
+    await showView(page, "Capitals"); await search.fill("Prague");
+    await showView(page, "Capitals"); await row("Prague").focus();
     await page.keyboard.press("Enter");
     await popup("Prague").waitFor();
     await focused(button(width === 1440 ? "Teal marker" : "Red marker"));
@@ -69,60 +70,61 @@ export async function verifyMapSelection(page, baseURL, screenshotDirectory) {
     const camera = await page.evaluate(() => ({ flight: window.selectionFlights.at(-1), point: window.selectionMap.project([14.4378, 50.0755]), height: window.selectionMap.getContainer().clientHeight }));
     assert.deepEqual(camera.flight.center, [14.4378, 50.0755]);
     assert.ok(camera.point.y > 200 && camera.point.y < camera.height - 15, JSON.stringify({ width, camera }));
-    await button("Teal marker").focus();
+    await showView(page, "Map"); await button("Teal marker").focus();
     await page.keyboard.press("Tab");
     await focused(button("Red marker"));
     await page.keyboard.press("Space");
     await page.keyboard.press("Escape");
     await focused(marker("Prague"));
     assert.equal(await page.locator("li[data-selected]").count(), 0);
-    await row("Prague").focus();
+    await showView(page, "Capitals"); await row("Prague").focus();
     await page.keyboard.press("Space");
     await focused(button("Red marker"));
     await button("Close popup").click();
     await focused(marker("Prague"));
-    await search.fill("");
+    await showView(page, "Capitals"); await search.fill("");
     // Interrupt the first animation, then activate the same city again.
-    await row("Berlin").click();
-    await row("Prague").click();
-    await row("Prague").click();
+    await showView(page, "Capitals"); await row("Berlin").click();
+    await showView(page, "Capitals"); await row("Prague").click();
+    await showView(page, "Capitals"); await row("Prague").click();
     await settled();
     assert.equal(await page.locator(".mapboxgl-popup").count(), 1);
     assert.equal(await marker("Berlin").getAttribute("aria-pressed"), "false");
     assert.equal(await marker("Prague").getAttribute("aria-pressed"), "true");
     await page.keyboard.press("Escape");
     const beforeActions = await countFlights();
-    await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
     await button("Edit").click();
     await page.keyboard.press("Escape");
-    await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
     await button("Delete").click();
     await button("Cancel").click();
     assert.equal(await countFlights(), beforeActions);
     // Direct marker activation synchronizes and reveals the offscreen row,
     // scrolling only the results region, without taking focus from the popup.
-    await row("Berlin").click();
+    await showView(page, "Capitals"); await row("Berlin").click();
     await settled();
     await page.keyboard.press("Escape");
     await page.locator(".list-content").evaluate(el => { el.scrollTop = 0; });
-    await marker("Prague").click();
+    await showView(page, "Map"); await marker("Prague").click();
     await focused(button("Red marker"));
     assert.equal(await row("Prague").getAttribute("aria-pressed"), "true");
+    await showView(page, "Capitals");
     assert.ok(await page.locator(".list-content").evaluate(el => el.scrollTop) > 0);
-    await search.fill("Berlin");
-    await marker("Prague").focus();
+    await showView(page, "Capitals"); await search.fill("Berlin");
+    await showView(page, "Map"); await marker("Prague").focus();
     await page.keyboard.press("Enter");
     assert.equal(await search.inputValue(), "Berlin");
     assert.equal(await page.locator("li[data-selected]").count(), 0);
     await button("Collapse sidebar").click();
-    await marker("Prague").focus();
+    await showView(page, "Map"); await marker("Prague").focus();
     await page.keyboard.press("Enter");
     assert.equal(await page.locator("#capital-sidebar").isVisible(), false);
     await button("Expand sidebar").click();
     assert.equal(await search.inputValue(), "Berlin");
-    await search.fill("");
+    await showView(page, "Capitals"); await search.fill("");
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await row("Prague").click();
+    await showView(page, "Capitals"); await row("Prague").click();
     await settled();
     assert.equal(await page.evaluate(() => window.selectionFlights.at(-1).duration), 0);
     const geometry = await page.evaluate(() => {
@@ -156,15 +158,16 @@ export async function verifyMapSelection(page, baseURL, screenshotDirectory) {
     await settled();
   }
   // Edit an active capital, then refresh and delete it, retaining colors and ID.
-  await search.fill("Prague");
-  await row("Prague").click();
-  await button("Actions for Prague").click();
+  await showView(page, "Capitals"); await search.fill("Prague");
+  await showView(page, "Capitals"); await row("Prague").click();
+  await showView(page, "Capitals"); await button("Actions for Prague").click();
   await button("Edit").click();
   await page.getByLabel("Capital name", { exact: true }).fill("Updated Prague");
   await page.getByLabel("Latitude", { exact: true }).fill("49");
   await page.getByLabel("Longitude", { exact: true }).fill("15");
   await button("Save changes").click();
   await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
+  await showView(page, "Map");
   await page.getByRole("heading", { name: "Updated Prague", exact: true }).waitFor();
   assert.equal(await button("Show Updated Prague, Czechia on map").getAttribute("aria-pressed"), "true");
   assert.equal(await button("Red marker").getAttribute("aria-pressed"), "true");
@@ -175,10 +178,10 @@ export async function verifyMapSelection(page, baseURL, screenshotDirectory) {
     const { useCapitalStore } = await import("/src/capital-store.ts");
     await useCapitalStore.getState().fetchCapitals();
   });
-  await button("Actions for Updated Prague").waitFor();
+  await showView(page, "Capitals"); await button("Actions for Updated Prague").waitFor();
   assert.equal(await countFlights(), beforeRefresh);
   assert.equal(await button("Red marker").getAttribute("aria-pressed"), "true");
-  await button("Actions for Updated Prague").click();
+  await showView(page, "Capitals"); await button("Actions for Updated Prague").click();
   await button("Delete").click();
   await button("Delete capital").click();
   await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });

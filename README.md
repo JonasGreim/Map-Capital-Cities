@@ -310,8 +310,25 @@ Countries key and database URL stay server-side. A production host must route
 `/capital` to Fastify on the same origin; the static build and `vite preview`
 do not provide the development proxy.
 
+At **700px and below**, the app starts in **Map** with a fixed **Map / Capitals**
+bottom navigation. **Capitals** opens the existing list, search, continent filter,
+Add and Reset controls. Search matches capitals/countries in the list only;
+continent filtering also controls visible map markers. Selecting a list row
+returns to Map, resizes the existing map, flies to the capital and opens its popup.
+Selecting a marker stays on Map; opening Capitals later reveals its selected row
+when allowed by the current filters. Switching views preserves search, continent,
+list position, camera, data and marker colors without another API read or map
+initialization. Use Left/Right or Home/End on the tabs to switch with a keyboard.
+
+**Pick on map** temporarily shows Map while retaining the create/edit draft;
+choosing coordinates, Cancel or Escape restores the form and previous view.
+Only Create/Save writes data. Native CRUD/reset dialogs and the popup's facts,
+Edit/Delete actions and four persistent marker colors remain available. Success
+feedback appears above the bottom navigation and safe area. Above 700px the
+existing desktop sidebar/map layout and independent sidebar toggle remain.
+
 The English sidebar shows each capital name above its country, preserving API order.
-Use the chevron button at the map’s upper-left corner to collapse or expand the
+On desktop, use the chevron button at the map’s upper-left corner to collapse or expand the
 sidebar. Collapsing keeps the search and list state and frees space for the map;
 hidden sidebar controls are excluded from keyboard navigation. The map remains
 mounted and retains its view and marker colors.
@@ -606,7 +623,7 @@ For a real browser check after backend startup:
    and reopen them. Check independent colors, 32×32 square dimensions, focus and
    Escape. Reload capital data through the store and check unchanged markers,
    colors, canvas and map view. Verify zoom/drag, nearby capitals and narrow-screen
-   popups. A full page reload should reset colors.
+   popups. A full page reload should preserve saved colors.
 5. Inspect browser console errors. An intentionally mocked HTTP failure is
    expected during the error check; normal loading should have no errors.
 
@@ -668,7 +685,7 @@ request is mocked while Mapbox runs in a fresh Chromium context.
 
 `frontend/test/sidebar-polish.browser.mjs` adds geometry checks for anchored menus
 at list edges and long names, native keyboard/focus transitions, marker-selected
-centering and clamping, independent search clear, four-second success timing,
+centering and clamping, independent search clear, three-second success timing,
 timer restart/unmount cleanup and persistent failures. It runs at 1440×900,
 390×844 and 320×568 through the same runner. Set `BROWSER_SCREENSHOT_DIR` to an
 existing directory outside the repository to capture this suite's screenshots.
@@ -679,8 +696,21 @@ existing directory outside the repository to capture this suite's screenshots.
 filter/search/read stability, CRUD ID cleanup, confirmed/failed reset and blocked
 storage at 1440×900, 390×844 and 320×568 with every capital request mocked.
 
+`frontend/test/mobile-navigation.browser.mjs` adds the Variant B integration
+regression: initial Map, keyboard tabs, hidden-pane focus exclusion, repeated
+list selections after resize (including reduced motion), marker/list handoff,
+search/filter/scroll/camera/color retention, API-read count, actual Mapbox creation
+count and canvas/marker identity. It also covers mocked CRUD/errors/reset, picker
+drafts/Cancel/Escape, focus, toast clearance and popup bounds at 1440×900,
+768×1024, 700×844, 390×844, 320×568 and 667×375, plus crossing 700px both ways.
+Existing suites now explicitly open the relevant mobile view instead of assuming
+both panes are visible. Their desktop collapse/expand scenarios use Map/Capitals
+on mobile; hidden DOM state assertions still inspect the mounted original nodes.
+Set `BROWSER_SUITES=mobile-navigation,selection` to run selected suites, or omit it
+for every suite. `BROWSER_SCREENSHOT_DIR` keeps screenshots outside the repository.
+
 `frontend/test/run-browser.mjs` starts only Vite, awaits server readiness and runs
-the coordinate-picker, marker-color, branding, flag, selection, sidebar, reset, continent, sidebar-polish,
+the mobile-navigation, toast, coordinate-picker, marker-color, branding, flag, selection, sidebar, reset, continent, sidebar-polish,
 popup-actions and map-error suites in fresh Chromium
 contexts. Every capital read/write is mocked; no backend or database is started.
 The coordinate-picker suite checks create/edit, draft preservation, repeat picks,

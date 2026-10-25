@@ -55,6 +55,7 @@ class Element extends EventTarget {
   value = "";
   offsetHeight = 240;
   clientHeight = 600;
+  clientWidth = 800;
   getBoundingClientRect() { return { top: 0, left: 0, right: 600, bottom: 600 }; }
   type = "";
   isConnected = true;
@@ -596,4 +597,20 @@ test("failed storage writes leave immediate marker color, swatch, popup reopen a
   assert.equal(dom.activeElement!.attributes.get("aria-label"), "Red marker");
   assert.equal(markers[0].options.element.style.backgroundColor, markerColors[1].value);
   assert.equal(markers.length, 2);
+});
+
+test("zero-sized hidden maps never calculate a flight; showing the same selection reuses marker and popup", t => {
+  const { controller, canvas, markers, popups, flights } = setup(t);
+  controller.update([berlin]);
+  canvas.clientWidth = 0;
+  canvas.clientHeight = 0;
+  controller.select(berlin.id, true);
+  assert.equal(flights.length, 0);
+  canvas.clientWidth = 390;
+  canvas.clientHeight = 650;
+  controller.select(berlin.id, true);
+  assert.equal(flights.length, 1);
+  assert.equal(markers.length, 1);
+  assert.equal(popups.length, 1);
+  assert.deepEqual((flights[0] as { center: number[] }).center, [13.405, 52.52]);
 });

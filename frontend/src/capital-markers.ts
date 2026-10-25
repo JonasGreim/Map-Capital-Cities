@@ -28,7 +28,7 @@ type Entry = {
 };
 
 // The sidebar occupies its own grid cell. Measure only the actual map and popup
-// to reserve room above the square, including on the stacked mobile layout.
+// to reserve room above the square, including in the mobile Map view.
 export function capitalCamera(capital: Capital, height: number, popupHeight: number, reducedMotion: boolean, zoom = 4.5) {
   const edge = 32;
   return { center: [capital.longitude, capital.latitude] as [number, number], zoom,
@@ -96,7 +96,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
   }
 
   function navigate(entry: Entry, zoom?: number) {
-    if (picking) return;
+    if (picking || !map.getContainer().clientWidth || !map.getContainer().clientHeight) return;
     map.stop();
     const height = map.getContainer().clientHeight;
     const popupHeight = entry.popup?.getElement()?.offsetHeight ?? 0;
@@ -108,7 +108,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
     if (entry.content) entry.content.style.maxHeight = `${Math.max(160, container.clientHeight - 112)}px`;
     const bounds = entry.popup?.getElement()?.getBoundingClientRect();
     const viewport = container.getBoundingClientRect();
-    if (bounds && (bounds.top < viewport.top + 64 || bounds.left < viewport.left
+    if (bounds && (bounds.top < viewport.top || bounds.left < viewport.left
       || bounds.right > viewport.right || bounds.bottom > viewport.bottom)) navigate(entry, map.getZoom());
   }
 

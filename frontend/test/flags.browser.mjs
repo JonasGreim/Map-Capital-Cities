@@ -1,5 +1,6 @@
 /* global document, innerWidth, getComputedStyle */
 import assert from "node:assert/strict";
+import { showView, viewButton } from "./view-helpers.mjs";
 
 // A fresh isolated page, real Mapbox/CDN resources, fully mocked capital CRUD.
 export async function verifyFlags(page, baseURL, screenshotDirectory) {
@@ -47,15 +48,16 @@ export async function verifyFlags(page, baseURL, screenshotDirectory) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
   await page.locator(".capital-marker").first().waitFor();
-  const button = name => page.getByRole("button", { name, exact: true });
+  const button = name => viewButton(page, name);
   const row = (name, country) => button(`Show ${name}, ${country} on map`);
   const assertLoading = async locator => {
+    await showView(page, await locator.evaluate(el => el.closest("#capital-sidebar") ? "Capitals" : "Map"));
     assert.equal(await locator.locator("img").evaluate(image => image.hidden && !image.complete), true);
     assert.equal(await locator.locator(".country-flag svg").isVisible(), true);
     assert.deepEqual(await locator.locator(".country-flag").evaluate(element => [element.offsetWidth, element.offsetHeight]), [40, 30]);
   };
   await assertLoading(row("Berlin", "Germany"));
-  await row("Berlin", "Germany").click();
+  await showView(page, "Capitals"); await row("Berlin", "Germany").click();
   await assertLoading(page.locator(".capital-popup"));
   releaseGermany();
   const assertImage = async (locator, code) => {
@@ -75,15 +77,15 @@ export async function verifyFlags(page, baseURL, screenshotDirectory) {
       assert.equal(await row(name, country).locator("img").count(), 0);
       assert.equal(await row(name, country).locator(".country-flag svg").count(), 1);
     }
-    await row("Berlin", "Germany").click();
+    await showView(page, "Capitals"); await row("Berlin", "Germany").click();
     const popup = page.locator(".capital-popup");
     await assertImage(popup, "de");
     if (screenshotDirectory) await page.screenshot({ path: `${screenshotDirectory}/flags-known-${width}.png` });
-    await button("Red marker").click();
+    await showView(page, "Map"); await button("Red marker").click();
     const marker = button("Berlin, Germany: change marker color");
     await page.keyboard.press("Escape");
     assert.equal(await marker.evaluate(element => element === document.activeElement), true);
-    await row("Paris", "France").click();
+    await showView(page, "Capitals"); await row("Paris", "France").click();
     await page.waitForFunction(() => {
       const image = document.querySelector(".capital-popup img");
       return image?.hidden && image.complete && image.naturalWidth === 0;
@@ -93,7 +95,7 @@ export async function verifyFlags(page, baseURL, screenshotDirectory) {
     const geometry = await page.evaluate(() => ({
       overflow: document.documentElement.scrollWidth > innerWidth,
       markers: [...document.querySelectorAll(".capital-marker")].every(element => element.offsetWidth === 32 && element.offsetHeight === 32 && getComputedStyle(element).borderRadius === "0px"),
-      flags: [...document.querySelectorAll(".country-flag")].every(element => element.offsetWidth === 40 && element.offsetHeight === 30),
+      flags: [...document.querySelectorAll(".country-flag")].filter(el => !el.closest("[hidden]")).every(element => element.offsetWidth === 40 && element.offsetHeight === 30),
     }));
     assert.deepEqual(geometry, { overflow: false, markers: true, flags: true });
     if (screenshotDirectory) await page.screenshot({ path: `${screenshotDirectory}/flags-${width}.png` });
@@ -101,8 +103,8 @@ export async function verifyFlags(page, baseURL, screenshotDirectory) {
     viewports.push({ width, ...geometry });
   }
   // Update the selected row through the real form/store and retain popup/color.
-  await row("Berlin", "Germany").click();
-  await button("Actions for Berlin").click();
+  await showView(page, "Capitals"); await row("Berlin", "Germany").click();
+  await showView(page, "Capitals"); await button("Actions for Berlin").click();
   await button("Edit").click();
   await page.getByLabel("Country name", { exact: true }).fill("Antarctica");
   await button("Save changes").click();
@@ -113,7 +115,7 @@ export async function verifyFlags(page, baseURL, screenshotDirectory) {
   await assertImage(row("Berlin", "Antarctica"), "aq");
   await assertImage(page.locator(".capital-popup"), "aq");
   // Czechia already loaded in the Prague row: also exercise decoded image reuse.
-  await button("Actions for Berlin").click();
+  await showView(page, "Capitals"); await button("Actions for Berlin").click();
   await button("Edit").click();
   await page.getByLabel("Country name", { exact: true }).fill("Czechia");
   await button("Save changes").click();
@@ -123,14 +125,14 @@ export async function verifyFlags(page, baseURL, screenshotDirectory) {
   assert.equal(await button("Red marker").getAttribute("aria-pressed"), "true");
   assert.equal(await row("Berlin", "Czechia").getAttribute("aria-pressed"), "true");
   await page.keyboard.press("Escape");
-  await button("Add capital").click();
+  await showView(page, "Capitals"); await button("Add capital").click();
   for (const [label, value] of [["Capital name", "Manual city"], ["Country name", "Germany"], ["Latitude", "0"], ["Longitude", "0"]]) {
     await page.getByLabel(label, { exact: true }).fill(value);
   }
   await button("Create capital").click();
   await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
   await assertImage(row("Manual city", "Germany"), "de");
-  await button("Actions for Manual city").click();
+  await showView(page, "Capitals"); await button("Actions for Manual city").click();
   await button("Delete").click();
   await button("Delete capital").click();
   await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
