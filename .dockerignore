@@ -1,0 +1,22 @@
+# Allow only inputs used by the two builds. Credentials, PDF, Git, tests,
+# screenshots, local dependencies and generated output never enter the context.
+**
+!package.json
+!package-lock.json
+!db/
+!db/default-capitals.json
+!backend/
+!backend/package.json
+!backend/tsconfig.json
+!backend/src/
+!backend/src/**
+!frontend/
+!frontend/package.json
+!frontend/tsconfig.json
+!frontend/vite.config.ts
+!frontend/index.html
+!frontend/nginx.conf
+!frontend/src/
+!frontend/src/**
+!frontend/public/
+!frontend/public/**
