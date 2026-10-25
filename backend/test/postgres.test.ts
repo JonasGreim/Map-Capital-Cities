@@ -95,7 +95,7 @@ test("PostgreSQL schema, constraints, atomic import, CRUD API and health", {
       assert.equal(created.statusCode, 201);
       const capital = created.json<Capital>();
       assert.ok(Number.isInteger(capital.id));
-      assert.deepEqual(capital, { ...input, id: capital.id, name: "Test City's", country: "API Test Country", flagCode: null, continents: null });
+      assert.deepEqual(capital, { ...input, id: capital.id, name: "Test City's", country: "API Test Country", flagCode: null, continents: null, population: null, currencies: null });
 
       const lookup = await app.inject({ method: "GET", url: `/capital/${encodeURIComponent("tEsT cItY'S")}` });
       assert.equal(lookup.statusCode, 200);
@@ -120,7 +120,7 @@ test("PostgreSQL schema, constraints, atomic import, CRUD API and health", {
       const replacement = { name: "Updated City", latitude: 90, longitude: -180, country: "Updated Country" };
       const updated = await app.inject({ method: "PUT", url: `/capital/${capital.id}`, payload: replacement });
       assert.equal(updated.statusCode, 200);
-      assert.deepEqual(updated.json(), { id: capital.id, ...replacement, flagCode: null, continents: null });
+      assert.deepEqual(updated.json(), { id: capital.id, ...replacement, flagCode: null, continents: null, population: null, currencies: null });
       assert.equal((await app.inject({ method: "GET", url: `/capital/${encodeURIComponent("Test City's")}` })).statusCode, 404);
 
       const invalid = await app.inject({ method: "PUT", url: `/capital/${capital.id}`, payload: { ...replacement, latitude: 91 } });
@@ -143,12 +143,12 @@ test("PostgreSQL schema, constraints, atomic import, CRUD API and health", {
     } finally { await app.close(); }
   });
 
-  await t.test("import metadata decorates preserved rows and manual CRUD without storing flags", async () => {
+  await t.test("import metadata decorates preserved rows and manual CRUD without storing country facts", async () => {
     const before = (await db.query("SELECT * FROM capitals ORDER BY id")).rows;
     const { metadata } = await importCapitals(db, "mock-key", async () => Response.json({ data: { objects: [
-      { ...record("Berlin", "Germany"), codes: { alpha_2: "DE" }, continents: ["Europe"] },
-      { names: { common: "Czechia" }, codes: { alpha_2: "CZ" }, continents: ["Europe"], capitals: [] },
-      { names: { common: "Antarctica" }, codes: { alpha_2: "AQ" }, continents: ["Antarctica"], capitals: [] },
+      { ...record("Berlin", "Germany"), codes: { alpha_2: "DE" }, continents: ["Europe"], population: 83200000, currencies: [{ code: "EUR", name: "Euro" }] },
+      { names: { common: "Czechia" }, codes: { alpha_2: "CZ" }, continents: ["Europe"], population: 10800000, currencies: [{ code: "CZK", name: "Czech koruna" }], capitals: [] },
+      { names: { common: "Antarctica" }, codes: { alpha_2: "AQ" }, continents: ["Antarctica"], population: 0, currencies: null, capitals: [] },
     ] } }));
     assert.deepEqual((await db.query("SELECT * FROM capitals ORDER BY id")).rows, before);
     const app = buildApp(db, metadata);
@@ -158,11 +158,11 @@ test("PostgreSQL schema, constraints, atomic import, CRUD API and health", {
       const created = await app.inject({ method: "POST", url: "/capital", payload: input });
       assert.equal(created.statusCode, 201);
       const capital = created.json<Capital>();
-      assert.deepEqual(created.json(), { ...input, id: capital.id, flagCode: "CZ", continents: ["Europe"] });
+      assert.deepEqual(created.json(), { ...input, id: capital.id, flagCode: "CZ", continents: ["Europe"], population: 10800000, currencies: [{ code: "CZK", name: "Czech koruna" }] });
       for (const [country, flagCode] of [["Antarctica", "AQ"], ["Unknown", null]] as const) {
         const updated = await app.inject({ method: "PUT", url: `/capital/${capital.id}`, payload: { ...input, country } });
         assert.equal(updated.statusCode, 200);
-        assert.deepEqual(updated.json(), { ...input, country, id: capital.id, flagCode, continents: country === "Antarctica" ? ["Antarctica"] : null });
+        assert.deepEqual(updated.json(), { ...input, country, id: capital.id, flagCode, continents: country === "Antarctica" ? ["Antarctica"] : null, population: country === "Antarctica" ? 0 : null, currencies: null });
         assert.deepEqual((await db.query("SELECT * FROM capitals WHERE id = $1", [capital.id])).rows[0], { ...input, country, id: capital.id });
       }
       assert.equal((await app.inject({ method: "DELETE", url: `/capital/${capital.id}` })).statusCode, 204);

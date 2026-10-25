@@ -15,7 +15,9 @@ class Element extends EventTarget {
   attributes = new Map<string, string>();
   style = { backgroundColor: "" };
   className = "";
-  textContent = "";
+  private text = "";
+  get textContent(): string { return this.text + this.children.map(child => child.textContent).join(""); }
+  set textContent(value: string) { this.text = value; this.children = []; }
   src = "";
   alt = "";
   width = 0;
@@ -39,6 +41,7 @@ class Element extends EventTarget {
   focusCount = 0;
   constructor(public tag: string) { super(); }
   append(...children: Element[]) { this.children.push(...children); }
+  replaceChildren(...children: Element[]) { this.children = children; }
   setAttribute(name: string, value: string) { this.attributes.set(name, value); }
   contains(element: unknown): boolean { return this === element || this.children.some((child) => child.contains(element)); }
   focus() { this.focusCount += 1; dom.activeElement = this; }
@@ -112,7 +115,7 @@ test("popup actions delegate current records without selection or camera writes 
     controller.update([berlin, paris]);
     controller.select(berlin.id);
     const popup = popups.at(-1)!;
-    const trigger = popup.content!.children[5];
+    const trigger = popup.content!.children[6];
     assert.equal(trigger.type, "button");
     assert.equal(trigger.className, "actions-trigger popup-actions-trigger");
     assert.equal(trigger.attributes.get("aria-label"), "Map actions for Berlin");
@@ -135,10 +138,36 @@ test("popup actions delegate current records without selection or camera writes 
 });
 
 function choose(popup: { content?: Element }, value: string) {
-  const button = popup.content!.children[3].children[1].children[markerColors.findIndex(color => color.value === value)];
+  const button = popup.content!.children[4].children[1].children[markerColors.findIndex(color => color.value === value)];
   button.click();
   return button;
 }
+
+test("country edits update the open definition list and clear stale facts without replacing marker/popup, color or selection", t => {
+  const { controller, markers, popups, flights, selections } = setup(t);
+  controller.update([{ ...berlin, flagCode: "DE", continents: ["Europe"], population: 83200000, currencies: [{ code: "EUR", name: "Euro" }] }]);
+  controller.select(1);
+  const popup = popups[0], marker = markers[0];
+  const facts = popup.content!.children.find(child => child.tag === "dl")!;
+  const texts = () => facts.children.map(child => child.textContent);
+  assert.deepEqual(texts(), ["Continent", "Europe", "Country population", "83,200,000", "Currency", "Euro (EUR)"]);
+  assert.deepEqual(facts.children.map(child => child.tag), ["dt", "dd", "dt", "dd", "dt", "dd"]);
+  choose(popup, markerColors[2].value);
+  controller.update([{ ...berlin, country: "Japan", flagCode: "JP", continents: ["Asia"], population: 123000000, currencies: [{ code: "JPY", name: "Japanese yen" }] }]);
+  assert.deepEqual(texts(), ["Continent", "Asia", "Country population", "123,000,000", "Currency", "Japanese yen (JPY)"]);
+  controller.update([{ ...berlin, name: "<img src=x onerror=alert(1)>", country: "Unknown" }]);
+  assert.deepEqual(texts(), ["Continent", "—", "Country population", "—", "Currency", "—"]);
+  assert.equal(popup.content!.children[0].textContent, "<img src=x onerror=alert(1)>");
+  assert.equal(facts.innerHTML, "");
+  assert.equal(markers.length, 1);
+  assert.equal(popups.length, 1);
+  assert.equal(markers[0], marker);
+  assert.equal(marker.options.element.style.backgroundColor, markerColors[2].value);
+  assert.equal(marker.options.element.attributes.get("aria-pressed"), "true");
+  assert.equal(popup.removed, false);
+  assert.deepEqual(selections, []);
+  assert.deepEqual(flights, []);
+});
 
 test("every valid capital gets a square marker at [longitude, latitude], including nearby capitals", (t) => {
   const { controller, markers } = setup(t);
@@ -165,7 +194,7 @@ test("activation opens a labeled popup with safe text and an accessible current-
   assert.equal(popups.length, 1);
   assert.equal(popups[0].content!.children[0].textContent, "<img onerror=alert(1)>");
   assert.equal(popups[0].content!.children[1].textContent, "Germany");
-  assert.equal(popups[0].content!.children[3].children[0].textContent, "Marker color");
+  assert.equal(popups[0].content!.children[4].children[0].textContent, "Marker color");
   assert.equal(dom.activeElement!.attributes.get("aria-label"), "Teal marker");
   assert.equal(button.attributes.get("aria-expanded"), "true");
 });
@@ -371,7 +400,7 @@ test("popup flags use validated metadata, fall back on image failure and update 
   controller.update([{ ...berlin, flagCode: "DE" }]);
   controller.select(berlin.id, true);
   const popup = popups[0];
-  const flag = popup.content!.children[4];
+  const flag = popup.content!.children[5];
   assert.equal(flag.attributes.get("aria-hidden"), "true");
   const image = flag.children[0];
   assert.equal(image.src, "https://flags.restcountries.com/v5/svg/de.svg");
@@ -415,9 +444,9 @@ test("popup flags reveal already cached images even without a later load event",
   });
   controller.update([{ ...berlin, flagCode: "DE" }]);
   markers[0].options.element.click();
-  assert.equal(popups[0].content!.children[4].children[0].hidden, false);
+  assert.equal(popups[0].content!.children[5].children[0].hidden, false);
   controller.update([{ ...berlin, country: "Czechia", flagCode: "CZ" }]);
-  assert.equal(popups[0].content!.children[4].children[0].hidden, false);
+  assert.equal(popups[0].content!.children[5].children[0].hidden, false);
 });
 
 test("reset closes selection and restores every marker to Teal without camera movement", (t) => {
@@ -433,7 +462,7 @@ test("reset closes selection and restores every marker to Teal without camera mo
   assert.equal(flights.length, before);
   assert.ok(markers.every(marker => marker.options.element.style.backgroundColor === markerColors[0].value));
   controller.select(berlin.id);
-  assert.equal(popups[2].content!.children[3].children[1].children[0].attributes.get("aria-pressed"), "true");
+  assert.equal(popups[2].content!.children[4].children[1].children[0].attributes.get("aria-pressed"), "true");
 });
 
 test("continent visibility retains instances and colors, blocks hidden activation and clears popup without hidden focus or flights", (t) => {
@@ -464,7 +493,7 @@ test("continent visibility retains instances and colors, blocks hidden activatio
   assert.equal(button.style.backgroundColor, markerColors[1].value);
   assert.equal(flights.length, before);
   controller.select(europe.id);
-  assert.equal(popups[1].content!.children[3].children[1].children[1].attributes.get("aria-pressed"), "true");
+  assert.equal(popups[1].content!.children[4].children[1].children[1].attributes.get("aria-pressed"), "true");
 });
 
 test("filtered CRUD and reset reconcile visibility while only actual deletion releases markers", (t) => {
@@ -509,7 +538,7 @@ test("persisted colors restore on new controllers with selected swatches and sta
   controller.update(records);
   assert.deepEqual(markers.map(marker => marker.options.element.style.backgroundColor), [markerColors[1].value, markerColors[2].value]);
   controller.select(1);
-  const swatches = popups.at(-1)!.content!.children[3].children[1].children;
+  const swatches = popups.at(-1)!.content!.children[4].children[1].children;
   assert.equal(swatches[1].attributes.get("aria-pressed"), "true");
   assert.equal(swatches[1].textContent, "✓");
   controller.setContinent("Asia"); controller.setContinent("");

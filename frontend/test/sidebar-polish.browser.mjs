@@ -171,6 +171,13 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
     assert.equal(await page.locator("#capital-sidebar").isVisible(), false);
     await button("Expand sidebar").click();
     await page.getByLabel("Continent", { exact: true }).selectOption("Europe");
+    // Resizing the map may still fit the taller popup through ResizeObserver.
+    // Finish that existing layout work before measuring search-only behavior.
+    await page.waitForFunction(() => {
+      const map = window.polishMap;
+      return !map.isMoving() && map.getCanvas().clientWidth === map.getContainer().clientWidth
+        && map.getCanvas().clientHeight === map.getContainer().clientHeight;
+    });
     const filteredView = await camera();
     const markerState = await page.locator(".capital-marker").evaluateAll(elements => elements.map(el => [el.hidden, el.getAttribute("aria-pressed"), el.style.backgroundColor]));
     assert.equal(await button("Clear search").count(), 1);

@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { readPopulation, readCurrencies, type CountryCurrency } from "./country-facts.js";
 
 const endpoint = "https://api.restcountries.com/countries/v5";
 const limit = 100;
@@ -28,7 +29,12 @@ function nonempty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0 && !value.includes("\0");
 }
 
-export type CountryMetadata = { flagCode: string | null; continents: string[] | null };
+export type CountryMetadata = {
+  flagCode: string | null;
+  continents: string[] | null;
+  population: number | null;
+  currencies: CountryCurrency[] | null;
+};
 export type CountryMetadataLookup = ReadonlyMap<string, CountryMetadata>;
 
 // Verified v5 continents values; North and South America stay separate.
@@ -44,7 +50,7 @@ function normalizeContinents(value: unknown): string[] | null {
 const countryKey = (name: string) => name.trim().toLowerCase();
 
 export function countryMetadata(metadata: CountryMetadataLookup, country: string): CountryMetadata {
-  return metadata.get(countryKey(country)) ?? { flagCode: null, continents: null };
+  return metadata.get(countryKey(country)) ?? { flagCode: null, continents: null, population: null, currencies: null };
 }
 
 function collectMetadata(metadata: Map<string, CountryMetadata>, record: unknown) {
@@ -53,11 +59,15 @@ function collectMetadata(metadata: Map<string, CountryMetadata>, record: unknown
   const flagCode = object(record.codes) && typeof record.codes.alpha_2 === "string"
     && record.codes.alpha_2.length === 2 && /^[A-Z]{2}$/.test(record.codes.alpha_2) ? record.codes.alpha_2 : null;
   const continents = normalizeContinents(record.continents);
+  const population = readPopulation(record.population);
+  const currencies = readCurrencies(record.currencies);
   const previous = metadata.get(name);
   // Each field fails closed independently; ambiguity remains sticky across pages.
   metadata.set(name, {
     flagCode: previous && previous.flagCode !== flagCode ? null : flagCode,
     continents: previous && JSON.stringify(previous.continents) !== JSON.stringify(continents) ? null : continents,
+    population: previous && previous.population !== population ? null : population,
+    currencies: previous && JSON.stringify(previous.currencies) !== JSON.stringify(currencies) ? null : currencies,
   });
 }
 

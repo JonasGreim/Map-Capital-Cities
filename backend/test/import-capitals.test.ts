@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Pool } from "pg";
 import { ImportError, importCapitals, countryMetadata } from "../src/import-capitals.js";
+import { readPopulation, readCurrencies } from "../src/country-facts.js";
 
 function country(name = "Berlin", common = "Germany", lat: unknown = 52.52, lng: unknown = 13.405) {
   return { names: { common }, capitals: [{ name, coordinates: { lat, lng } }] };
@@ -38,6 +39,55 @@ function responses(...bodies: unknown[]): typeof fetch {
     return body instanceof Response ? body : Response.json(body);
   };
 }
+
+test("country facts accept only safe nonnegative integer populations, including zero", () => {
+  for (const value of [0, 845000, 83200000, Number.MAX_SAFE_INTEGER]) assert.equal(readPopulation(value), value);
+  for (const value of [undefined, null, "123", true, {}, NaN, Infinity, -Infinity, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.equal(readPopulation(value), null, String(value));
+  }
+});
+
+test("v5 currency lists retain valid codes/names, deduplicate and suppress contradictory names", () => {
+  assert.deepEqual(readCurrencies([{ code: "CAD", name: "Canadian dollar", symbol: "$" }]), [{ code: "CAD", name: "Canadian dollar" }]);
+  assert.deepEqual(readCurrencies([
+    { code: "USD", name: " US dollar " }, { code: "EUR", name: "Euro" }, { code: "USD", name: "US dollar" },
+    { code: "JPY" }, { code: "GBP", name: "" }, { code: "CHF", name: "bad\nname" },
+    { code: "NZD", name: "<img src=x onerror=alert(1)>" }, { code: "AUD", name: "hidden\u202ename" },
+    null, [], "EUR", { code: "eur" }, { code: "US\n" }, { code: "EUR\n" }, { code: "<x>" }, { code: "" }, { name: "Euro" },
+    { code: "CAD", name: "First" }, { code: "CAD", name: "Second" }, { code: "CAD", name: "First" },
+  ]), [{ code: "AUD" }, { code: "CHF" }, { code: "EUR", name: "Euro" }, { code: "GBP" }, { code: "JPY" }, { code: "NZD" }, { code: "USD", name: "US dollar" }]);
+  for (const value of [undefined, null, {}, { EUR: { name: "Euro" } }, "EUR", [], [null, { code: "" }]]) {
+    assert.equal(readCurrencies(value), null);
+  }
+});
+
+test("all facts validate independently and conflicts stay unknown across pages", async () => {
+  const currencies = [{ code: "EUR", name: "Euro" }, { code: "USD" }];
+  const record = { ...country(), codes: { alpha_2: "DE" }, continents: ["Europe"], population: 83200000, currencies };
+  const objects = [record,
+    { ...record, names: { common: "Zero" }, population: 0 },
+    { ...record, names: { common: "Bad population" }, population: "83200000" },
+    { ...record, names: { common: "Bad currency" }, currencies: {} },
+    { ...record, names: { common: "Bad flag" }, codes: {} },
+    { ...record, names: { common: "Bad continent" }, continents: ["Invalid"] },
+  ];
+  const { metadata } = await importCapitals(database().db, "test", responses(
+    page(objects, 0, objects.length + 4),
+    page([{ ...record, currencies: [...currencies].reverse() },
+      { ...record, names: { common: "Conflicting" } }], objects.length, objects.length + 4),
+    page([{ ...record, names: { common: "conflicting" }, population: 42, currencies: [{ code: "JPY" }] },
+      { ...record, names: { common: "CONFLICTING" } }], objects.length + 2, objects.length + 4),
+  ));
+  const valid = { flagCode: "DE", continents: ["Europe"], population: 83200000, currencies };
+  assert.deepEqual(countryMetadata(metadata, " GERMANY "), valid);
+  assert.deepEqual(countryMetadata(metadata, "Zero"), { ...valid, population: 0 });
+  assert.deepEqual(countryMetadata(metadata, "Bad population"), { ...valid, population: null });
+  assert.deepEqual(countryMetadata(metadata, "Bad currency"), { ...valid, currencies: null });
+  assert.deepEqual(countryMetadata(metadata, "Bad flag"), { ...valid, flagCode: null });
+  assert.deepEqual(countryMetadata(metadata, "Bad continent"), { ...valid, continents: null });
+  assert.deepEqual(countryMetadata(metadata, "Conflicting"), { ...valid, population: null, currencies: null });
+  assert.deepEqual(countryMetadata(metadata, "Unknown"), { flagCode: null, continents: null, population: null, currencies: null });
+});
 
 test("imports every metadata page, maps only the first capital and sends v5 bearer authentication", async () => {
   const db = database();
@@ -228,7 +278,7 @@ test("flag metadata validates exact codes and names and permanently suppresses a
 });
 
 test("later-page, pagination, connection and transaction failures cannot publish partial country metadata", async () => {
-  const record = { ...country(), codes: { alpha_2: "DE" }, continents: ["Europe"] };
+  const record = { ...country(), codes: { alpha_2: "DE" }, continents: ["Europe"], population: 83200000, currencies: [{ code: "EUR", name: "Euro" }] };
   const initial = await importCapitals(database().db, "test", responses(page([record], 0, 1)));
   let published = initial.metadata;
   for (const [db, fetcher] of [
@@ -244,29 +294,29 @@ test("later-page, pagination, connection and transaction failures cannot publish
       return true;
     });
     assert.equal(published, initial.metadata);
-    assert.deepEqual(countryMetadata(published, "Germany"), { flagCode: "DE", continents: ["Europe"] });
+    assert.deepEqual(countryMetadata(published, "Germany"), { flagCode: "DE", continents: ["Europe"], population: 83200000, currencies: [{ code: "EUR", name: "Euro" }] });
   }
 });
 
 test("continent metadata validates and normalizes all pages independently of valid capitals and flags", async () => {
   const records = [
-    { ...country(), codes: { alpha_2: "DE" }, continents: [" europe ", "EUROPE"] },
-    { names: { common: "Antarctica" }, capitals: [], continents: ["Antarctica"] },
-    { ...country("Ankara", "Turkey"), continents: ["Europe", "Asia"] },
-    { names: { common: " TURKEY " }, continents: [" asia ", "Europe", "Asia"] },
+    { ...country(), codes: { alpha_2: "DE" }, continents: [" europe ", "EUROPE"], population: null, currencies: null },
+    { names: { common: "Antarctica" }, capitals: [], continents: ["Antarctica"], population: null, currencies: null },
+    { ...country("Ankara", "Turkey"), continents: ["Europe", "Asia"], population: null, currencies: null },
+    { names: { common: " TURKEY " }, continents: [" asia ", "Europe", "Asia"], population: null, currencies: null },
     ...[undefined, null, [], "Europe", [null], [42], [""], ["Atlantis"], ["Europe", "Atlantis"]]
       .map((continents, i) => ({ names: { common: `Invalid ${i}` }, continents })),
-    { names: { common: "Contradictory" }, continents: ["Europe"] },
-    { names: { common: "contradictory" }, continents: ["Asia"] },
-    { names: { common: "CONTRADICTORY" }, continents: ["Europe"] },
-    { names: { common: "Missing later" }, continents: ["Europe"] },
+    { names: { common: "Contradictory" }, continents: ["Europe"], population: null, currencies: null },
+    { names: { common: "contradictory" }, continents: ["Asia"], population: null, currencies: null },
+    { names: { common: "CONTRADICTORY" }, continents: ["Europe"], population: null, currencies: null },
+    { names: { common: "Missing later" }, continents: ["Europe"], population: null, currencies: null },
     { names: { common: "Missing later" } },
-    { names: { common: "Missing later" }, continents: ["Europe"] },
+    { names: { common: "Missing later" }, continents: ["Europe"], population: null, currencies: null },
   ];
   const result = await importCapitals(database({ rowCount: 0 }).db, "test", responses(
     page(records.slice(0, 3), 0, records.length), page(records.slice(3), 3, records.length),
   ));
-  assert.deepEqual(countryMetadata(result.metadata, " GERMANY "), { flagCode: "DE", continents: ["Europe"] });
+  assert.deepEqual(countryMetadata(result.metadata, " GERMANY "), { flagCode: "DE", continents: ["Europe"], population: null, currencies: null });
   assert.deepEqual(countryMetadata(result.metadata, "Turkey").continents, ["Asia", "Europe"]);
   assert.deepEqual(countryMetadata(result.metadata, "Antarctica").continents, ["Antarctica"]);
   for (const name of ["Unknown", "Contradictory", "Missing later", ...Array.from({ length: 9 }, (_, i) => `Invalid ${i}`)]) {
