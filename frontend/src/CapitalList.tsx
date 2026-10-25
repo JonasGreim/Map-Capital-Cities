@@ -35,7 +35,7 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
   const { continent, setContinent, mutating, resetCapitals, selectedCapitalId, selectionSource, selectionVersion, selectCapital } = useCapitalStore();
   const selectedRow = useRef<HTMLButtonElement>(null);
   const [resetting, setResetting] = useState(false);
-  const { actions, toggleActions, closeActions, createCapital, setNotice } = useCapitalActions();
+  const { actions, toggleActions, closeActions, createCapital, setNotice, picking } = useCapitalActions();
   const [query, setQuery] = useState("");
   const searchInput = useRef<HTMLInputElement>(null);
   const filtered = useMemo(() => filterCapitals(capitals, query, continent), [capitals, query, continent]);
@@ -94,8 +94,8 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
         </select>
       </div>
       <div className="list-actions">
-        <button id="add-capital" type="button" disabled={loading || mutating || !!error} onClick={createCapital}><span aria-hidden="true">＋</span> Add capital</button>
-        <button id="reset-capitals" type="button" className="secondary" disabled={loading || mutating || !!error}
+        <button id="add-capital" type="button" disabled={loading || mutating || !!error || picking} onClick={createCapital}><span aria-hidden="true">＋</span> Add capital</button>
+        <button id="reset-capitals" type="button" className="secondary" disabled={loading || mutating || !!error || picking}
           onClick={() => { setNotice(""); closeActions(); setResetting(true); }}>Reset to default</button>
       </div>
       <a className="skip-to-map" href="#world-map">Skip to map</a>
@@ -118,7 +118,7 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
           <ul className="capital-list">
             {filtered.map((capital) => (
               <li key={capital.id} data-selected={selectedCapitalId === capital.id || undefined} data-actions-open={actions?.trigger.id === `capital-actions-${capital.id}` || undefined}>
-                <button type="button" className="capital-label" ref={selectedCapitalId === capital.id ? selectedRow : undefined}
+                <button type="button" className="capital-label" disabled={picking} ref={selectedCapitalId === capital.id ? selectedRow : undefined}
                   aria-label={`Show ${capital.name}, ${capital.country} on map`} aria-pressed={selectedCapitalId === capital.id}
                   onClick={() => { closeActions(); selectCapital(capital.id); }}>
                   <CountryFlag code={capital.flagCode} />
@@ -126,7 +126,7 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
                     <span className="country">{capital.country}</span></span>
                 </button>
                 <div className="row-actions">
-                  <button id={`capital-actions-${capital.id}`} type="button" className="actions-trigger" disabled={mutating}
+                  <button id={`capital-actions-${capital.id}`} type="button" className="actions-trigger" disabled={mutating || picking}
                     aria-label={`Actions for ${capital.name}`} aria-expanded={actions?.trigger.id === `capital-actions-${capital.id}`} aria-controls={actions?.trigger.id === `capital-actions-${capital.id}` ? `capital-options-${capital.id}` : undefined}
                     onClick={(event) => toggleActions(capital, event.currentTarget)}>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="19" r="1.7" /></svg>

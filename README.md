@@ -342,6 +342,14 @@ then choose **Delete capital**. **Cancel** or Escape closes either dialog withou
 writing. While a request is pending, controls and dismissal are disabled to avoid
 duplicate submissions. Success appears briefly at the upper-right of the window.
 
+**Pick on map** optionally fills latitude and longitude in both create and edit.
+The modal temporarily closes while keeping the draft; click the map to return
+with coordinates to six decimal places and a temporary preview. Name and country
+stay unchanged. **Cancel** in pick mode or Escape returns to the form with the
+previous coordinates. Only **Create capital** / **Save changes** writes data.
+Canceling the form discards its draft and preview. Manual coordinates remain
+editable; if the map is unavailable, picking is disabled with an explanation.
+
 You can also open a capital's marker popup and choose **Map actions for [capital]**
 (⋮) in its header, then **Edit** or **Delete**. Both entry points share one actions
 panel and the same dialogs, validation and store mutations. The dialogs and success
@@ -570,7 +578,7 @@ process listeners. The dev HTTP test uses a fresh temporary cache and disables
 speculative JS transforms and dependency optimization only in that test: it reads
 HTML/SVG and never executes application JS. This avoids a cold-cache shutdown
 race where the plugin container waits on transforms waiting on the optimizer.
-The application Vite config and browser coverage remain unchanged.
+The application Vite config remains unchanged.
 `branding.browser.mjs` verifies SVG decoding,
 title, native mouse/keyboard navigation, focus, motion and layout at the three
 standard viewport sizes. It runs in the existing browser runner and can also run
@@ -672,9 +680,12 @@ filter/search/read stability, CRUD ID cleanup, confirmed/failed reset and blocke
 storage at 1440×900, 390×844 and 320×568 with every capital request mocked.
 
 `frontend/test/run-browser.mjs` starts only Vite, awaits server readiness and runs
-the marker-color, branding, flag, selection, sidebar, reset, continent, sidebar-polish
-and popup-actions suites in fresh Chromium
+the coordinate-picker, marker-color, branding, flag, selection, sidebar, reset, continent, sidebar-polish,
+popup-actions and map-error suites in fresh Chromium
 contexts. Every capital read/write is mocked; no backend or database is started.
+The coordinate-picker suite checks create/edit, draft preservation, repeat picks,
+Cancel/Escape and focus, failed saves, pan/zoom, sidebar collapse, context loss,
+reset and unmount cleanup at 1440×900, 390×844 and 320×568.
 The popup-actions suite covers expanded/collapsed sidebars at all three viewports,
 keyboard and touch, long names/close-button geometry, shared edit/delete dialogs,
 validation and HTTP/network failures, pending writes, focus recovery, filters,

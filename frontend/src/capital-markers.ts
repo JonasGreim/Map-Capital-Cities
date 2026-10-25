@@ -79,6 +79,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
   const entries = new globalThis.Map<number, Entry>();
   let active: Entry | undefined;
   let continent: ContinentFilter = "";
+  let picking = false;
 
   function updateVisibility(entry: Entry) {
     const visible = matchesContinent(entry.capital, continent);
@@ -95,6 +96,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
   }
 
   function navigate(entry: Entry, zoom?: number) {
+    if (picking) return;
     map.stop();
     const height = map.getContainer().clientHeight;
     const popupHeight = entry.popup?.getElement()?.offsetHeight ?? 0;
@@ -111,7 +113,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
   }
 
   function open(entry: Entry) {
-    if (!entry.visible || entry.popup) return;
+    if (picking || !entry.visible || entry.popup) return;
     active?.disposePopup?.(false, false);
     const content = document.createElement("div");
     content.className = "capital-popup";
@@ -242,6 +244,10 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
   }
 
   return {
+    setPicking(value: boolean) {
+      picking = value;
+      if (value) active?.disposePopup?.(false, false);
+    },
     setContinent(value: ContinentFilter) {
       continent = value;
       for (const entry of entries.values()) updateVisibility(entry);
@@ -255,6 +261,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
       }
     },
     select(id: number | null, fromList = false) {
+      if (picking) return;
       if (id === null) { active?.disposePopup?.(false, false); return; }
       const entry = entries.get(id);
       if (!entry?.visible) return;
@@ -297,7 +304,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
             capital, marker, button, color, visible: true,
             open: (event) => {
               event.stopPropagation();
-              if (!created.visible) return;
+              if (picking || !created.visible) return;
               open(created);
               onSelectionChange(created.capital.id);
               // Keep edge popups in the map without changing the user's zoom.

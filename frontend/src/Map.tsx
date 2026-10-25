@@ -3,12 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import { useCapitalStore } from "./capital-store";
 import { createCapitalMarkers } from "./capital-markers";
 import { useCapitalActions } from "./CapitalActions";
+import { listenForCoordinates } from "./coordinate-picker";
 
 const token = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 
 export function Map() {
-  const { toggleActions, closeActions } = useCapitalActions();
+  const { toggleActions, closeActions, picking, preview, setMapAvailable, finishPick, cancelPick } = useCapitalActions();
   const el = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<mapboxgl.Map>();
+  const cancelButton = useRef<HTMLButtonElement>(null);
   const [mapError, setMapError] = useState(false);
   const [resourceError, setResourceError] = useState(false);
   const markers = useRef<ReturnType<typeof createCapitalMarkers>>();
@@ -32,6 +35,7 @@ export function Map() {
       setMapError(true);
       return;
     }
+    mapRef.current = map;
     // Generic errors have no fatality signal (tiles, sprites, requests, etc.).
     // Before the initial style is ready, offer neutral setup feedback; after
     // that, do not infer whole-map unavailability from resource errors.
@@ -42,9 +46,10 @@ export function Map() {
     const styled = () => {
       styleReady = true;
       setResourceError(false);
+      setMapAvailable(true);
     };
-    const contextLost = () => setMapError(true);
-    const contextRestored = () => setMapError(false);
+    const contextLost = () => { setMapError(true); setMapAvailable(false); };
+    const contextRestored = () => { setMapError(false); setMapAvailable(styleReady); };
     map.on("error", failed);
     map.on("style.load", styled);
     map.on("webglcontextlost", contextLost);
@@ -66,9 +71,11 @@ export function Map() {
       map.off("webglcontextrestored", contextRestored);
       capitalMarkers.destroy();
       markers.current = undefined;
+      mapRef.current = undefined;
+      setMapAvailable(false);
       map.remove();
     };
-  }, [toggleActions, closeActions]);
+  }, [toggleActions, closeActions, setMapAvailable]);
 
   useEffect(() => { markers.current?.setContinent(continent); }, [continent]);
   useEffect(() => {
@@ -86,8 +93,54 @@ export function Map() {
     }
   }, [selectionVersion, selectedCapitalId]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !picking) return;
+    // End an existing camera flight without starting another one.
+    map.stop();
+    markers.current?.setPicking(true);
+    const dispose = listenForCoordinates(map, finishPick);
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      cancelPick();
+    };
+    document.addEventListener("keydown", escape, true);
+    // Wait until the form effect has removed the native modal layer.
+    const frame = requestAnimationFrame(() => {
+      cancelButton.current?.focus();
+      cancelButton.current?.scrollIntoView({ block: "nearest" });
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      dispose();
+      document.removeEventListener("keydown", escape, true);
+      markers.current?.setPicking(false);
+      // Restore the existing selection without a list-triggered flyTo.
+      markers.current?.select(useCapitalStore.getState().selectedCapitalId);
+    };
+  }, [picking, finishPick, cancelPick]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !preview) return;
+    const element = document.createElement("div");
+    element.className = "coordinate-preview";
+    element.setAttribute("role", "img");
+    element.setAttribute("aria-label", "Temporary coordinate preview");
+    const marker = new mapboxgl.Marker({ element, anchor: "center" })
+      .setLngLat([Number(preview.longitude), Number(preview.latitude)]).addTo(map);
+    return () => { marker.remove(); };
+  }, [preview]);
+
   if (!token) return <div className="map map-unavailable" role="status">Map unavailable. Set VITE_MAPBOX_TOKEN in the root .env and restart the frontend.</div>;
-  return <><div className="map" ref={el} />{(mapError || resourceError) && <p className="map-error" role="status">
+  return <><div className="map" ref={el} />
+    {picking && <div className="coordinate-pick-banner">
+      <div role="status"><strong>Pick coordinates</strong><p>Click on the map to choose a location. Escape cancels.</p></div>
+      <button ref={cancelButton} type="button" className="secondary" onClick={cancelPick}>Cancel</button>
+    </div>}
+    {(mapError || resourceError) && <p className="map-error" role="status">
     {mapError
       ? "Map could not load. Check your Mapbox token and connection. The capital list is still available."
       : "Map resources could not load. Check your Mapbox token and connection. The capital list is still available."}
