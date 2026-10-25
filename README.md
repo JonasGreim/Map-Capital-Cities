@@ -368,6 +368,13 @@ The map stays mounted during these interactions. Markers, popups, event listener
 and the resize observer are cleaned up on unmount. Map initialization/load failures
 show readable feedback while independent list CRUD remains available.
 
+The “Map could not load” message is reserved for a construction failure or a lost
+WebGL context; context restoration clears the latter. Generic Mapbox errors have
+no reliable fatality flag. Before the initial style is ready, they show a neutral
+resource warning that clears on `style.load`. After style readiness, individual
+resource errors do not mark the whole map unavailable. Other runtime failures
+cannot be classified reliably from the generic event alone.
+
 Markers can overlap at world zoom levels; zoom in to distinguish nearby capitals,
 or select a capital from the list or keyboard. No clustering or positional offsets
 are applied. Mapbox's globe projection can hide capitals on the far side; drag the
@@ -423,6 +430,15 @@ canvas/marker objects, overflow and console errors. The optional screenshot
 directory must exist and should be outside the repository. Both browser fixtures
 are separate from CI and require a local frontend, Playwright tooling and Mapbox
 network access; their API mocks do not establish PostgreSQL integration.
+
+`frontend/test/map-errors.browser.mjs` exports
+`verifyMapErrors(page, baseURL, mode)` for a fresh isolated Playwright Page per mode
+(`success`, `initial-style-error`, `construction-error`). It checks actual component
+initialization, controlled resource errors, failed style-request recovery, real
+WebGL loss/restoration, normal selection/zoom and listener cleanup on unmount.
+Capital requests are mocked; browser-only Vite instrumentation exposes the map
+and React root without adding a production debug API. Run it separately from
+`npm test` with the same local frontend/Playwright/Mapbox prerequisites.
 
 The isolated browser MCP tools configured in `.codex/config.toml` can run these
 checks locally with the root `.env`. Browser checks remain separate from CI and

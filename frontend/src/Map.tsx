@@ -8,6 +8,7 @@ const token = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 export function Map() {
   const el = useRef<HTMLDivElement>(null);
   const [mapError, setMapError] = useState(false);
+  const [resourceError, setResourceError] = useState(false);
   const markers = useRef<ReturnType<typeof createCapitalMarkers>>();
   const capitals = useCapitalStore((state) => state.capitals);
   const selectionVersion = useCapitalStore((state) => state.selectionVersion);
@@ -26,10 +27,23 @@ export function Map() {
       setMapError(true);
       return;
     }
-    const failed = () => setMapError(true);
-    const loaded = () => setMapError(false);
+    // Generic errors have no fatality signal (tiles, sprites, requests, etc.).
+    // Before the initial style is ready, offer neutral setup feedback; after
+    // that, do not infer whole-map unavailability from resource errors.
+    let styleReady = false;
+    const failed = () => {
+      if (!styleReady) setResourceError(true);
+    };
+    const styled = () => {
+      styleReady = true;
+      setResourceError(false);
+    };
+    const contextLost = () => setMapError(true);
+    const contextRestored = () => setMapError(false);
     map.on("error", failed);
-    map.on("load", loaded);
+    map.on("style.load", styled);
+    map.on("webglcontextlost", contextLost);
+    map.on("webglcontextrestored", contextRestored);
     const capitalMarkers = createCapitalMarkers(map, mapboxgl, (id, closedId) => {
       const state = useCapitalStore.getState();
       // A closing/deleted popup must not clear a newer, batched list selection.
@@ -42,7 +56,9 @@ export function Map() {
     return () => {
       observer.disconnect();
       map.off("error", failed);
-      map.off("load", loaded);
+      map.off("style.load", styled);
+      map.off("webglcontextlost", contextLost);
+      map.off("webglcontextrestored", contextRestored);
       capitalMarkers.destroy();
       markers.current = undefined;
       map.remove();
@@ -59,5 +75,9 @@ export function Map() {
   }, [selectionVersion, selectedCapitalId]);
 
   if (!token) return <div className="map map-unavailable" role="status">Map unavailable. Set VITE_MAPBOX_TOKEN in the root .env and restart the frontend.</div>;
-  return <><div className="map" ref={el} />{mapError && <p className="map-error" role="status">Map could not load. Check your Mapbox token and connection. The capital list is still available.</p>}</>;
+  return <><div className="map" ref={el} />{(mapError || resourceError) && <p className="map-error" role="status">
+    {mapError
+      ? "Map could not load. Check your Mapbox token and connection. The capital list is still available."
+      : "Map resources could not load. Check your Mapbox token and connection. The capital list is still available."}
+  </p>}</>;
 }
