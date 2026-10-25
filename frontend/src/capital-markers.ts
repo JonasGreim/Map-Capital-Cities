@@ -2,13 +2,10 @@ import mapboxgl from "mapbox-gl";
 import { matchesContinent, type ContinentFilter } from "./continent-filter";
 import type { Capital } from "./api";
 import { updateCountryFlag } from "./country-flag";
+import { markerColors } from "./marker-colors";
+import { readMarkerColor, saveMarkerColor } from "./marker-color-storage";
 
-export const markerColors = [
-  { name: "Teal", value: "#216278" },
-  { name: "Red", value: "#b42318" },
-  { name: "Purple", value: "#6941c6" },
-  { name: "Gold", value: "#946200" },
-] as const;
+export { markerColors } from "./marker-colors";
 
 type Entry = {
   capital: Capital;
@@ -39,7 +36,7 @@ export function capitalCamera(capital: Capital, height: number, popupHeight: num
 
 const coordinates = (capital: Capital) => `${capital.latitude.toFixed(4)}, ${capital.longitude.toFixed(4)}`;
 
-// Each ID owns its marker and in-memory color for as long as it is in the data.
+// Each ID owns its marker and current color for as long as it is in the data.
 export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelectionChange: (id: number | null, closedId?: number) => void = () => {},
   actions?: { onOpen: (capital: Capital, trigger: HTMLButtonElement) => void; onClose: (trigger: HTMLButtonElement) => void }) {
   const entries = new globalThis.Map<number, Entry>();
@@ -113,6 +110,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
       const choose = () => {
         entry.color = color.value;
         entry.button.style.backgroundColor = entry.color;
+        saveMarkerColor(entry.capital.id, entry.color);
         buttons.forEach((swatch, index) => {
           const selected = markerColors[index].value === entry.color;
           swatch.setAttribute("aria-pressed", String(selected));
@@ -248,13 +246,14 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
           button.setAttribute("aria-haspopup", "dialog");
           button.setAttribute("aria-expanded", "false");
           button.setAttribute("aria-pressed", "false");
-          button.style.backgroundColor = markerColors[0].value;
+          const color = readMarkerColor(capital.id);
+          button.style.backgroundColor = color;
           const marker = new api.Marker({ element: button, anchor: "center" })
             .setLngLat([capital.longitude, capital.latitude]).addTo(map);
           // Mapbox assigns role="img" even to custom elements.
           button.setAttribute("role", "button");
           const created: Entry = {
-            capital, marker, button, color: markerColors[0].value, visible: true,
+            capital, marker, button, color, visible: true,
             open: (event) => {
               event.stopPropagation();
               if (!created.visible) return;

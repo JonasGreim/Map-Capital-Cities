@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test, type TestContext } from "node:test";
 import type mapboxgl from "mapbox-gl";
 import { capitalCamera, createCapitalMarkers, markerColors } from "../src/capital-markers";
+import { markerColorStorageKey, clearMarkerColors } from "../src/marker-color-storage";
 
 const berlin = { id: 1, name: "Berlin", country: "Germany", latitude: 52.52, longitude: 13.405 };
 const paris = { id: 2, name: "Paris", country: "France", latitude: 48.85, longitude: 2.35 };
@@ -94,12 +95,13 @@ function setup(t: TestContext) {
     onOpen: (capital, trigger) => openedActions.push({ id: capital.id, name: capital.name, trigger }),
     onClose: trigger => closedActions.push(trigger),
   });
-  t.after(() => {
+  const dispose = () => {
     controller.destroy();
     if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
     else Reflect.deleteProperty(globalThis, "document");
-  });
-  return { controller, markers, popups, canvas, selections, flights, openedActions, closedActions, stops: () => stops };
+  };
+  t.after(dispose);
+  return { controller, markers, popups, canvas, selections, flights, openedActions, closedActions, stops: () => stops, dispose };
 }
 
 test("popup actions delegate current records without selection or camera writes and clean up on every closure", t => {
@@ -488,4 +490,61 @@ test("filtered CRUD and reset reconcile visibility while only actual deletion re
   assert.equal(markers[2].options.element.hidden, false);
   assert.equal(markers[3].options.element.hidden, true);
   assert.equal(markers[2].options.element.style.backgroundColor, markerColors[0].value);
+});
+
+test("persisted colors restore on new controllers with selected swatches and stable markers across edit/filter/read", t => {
+  const values = new Map([[markerColorStorageKey, JSON.stringify({ 1: markerColors[1].value, 2: markerColors[2].value })]]);
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); },
+    removeItem: (key: string) => { values.delete(key); },
+  } });
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, "localStorage", previous);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  });
+  const { controller, markers, popups, dispose } = setup(t);
+  const records = [{ ...berlin, continents: ["Europe" as const] }, paris];
+  controller.update(records);
+  assert.deepEqual(markers.map(marker => marker.options.element.style.backgroundColor), [markerColors[1].value, markerColors[2].value]);
+  controller.select(1);
+  const swatches = popups.at(-1)!.content!.children[3].children[1].children;
+  assert.equal(swatches[1].attributes.get("aria-pressed"), "true");
+  assert.equal(swatches[1].textContent, "✓");
+  controller.setContinent("Asia"); controller.setContinent("");
+  controller.update([{ ...records[0], name: "Changed", country: "Changed country", latitude: 0 }, records[1]]);
+  controller.select(1);
+  assert.equal(dom.activeElement!.attributes.get("aria-label"), "Red marker");
+  assert.equal(markers.length, 2);
+  choose(popups.at(-1)!, markerColors[3].value);
+  assert.deepEqual(JSON.parse(values.get(markerColorStorageKey)!), { 1: markerColors[3].value, 2: markerColors[2].value });
+  dispose();
+  const reloaded = setup(t);
+  reloaded.controller.update([berlin, paris, { ...paris, id: 3 }]);
+  assert.deepEqual(reloaded.markers.map(marker => marker.options.element.style.backgroundColor), [markerColors[3].value, markerColors[2].value, markerColors[0].value]);
+  clearMarkerColors(); reloaded.controller.reset();
+  assert.ok(reloaded.markers.every(marker => marker.options.element.style.backgroundColor === markerColors[0].value));
+  reloaded.dispose();
+  const afterReset = setup(t);
+  afterReset.controller.update([berlin, paris]);
+  assert.ok(afterReset.markers.every(marker => marker.options.element.style.backgroundColor === markerColors[0].value));
+});
+
+test("failed storage writes leave immediate marker color, swatch, popup reopen and filter behavior usable", t => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, get: () => { throw new Error("SecurityError"); } });
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, "localStorage", previous);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  });
+  const { controller, markers, popups } = setup(t);
+  controller.update([berlin, paris]); controller.select(1);
+  const swatch = choose(popups.at(-1)!, markerColors[1].value);
+  assert.equal(swatch.attributes.get("aria-pressed"), "true");
+  controller.setContinent("Asia"); controller.setContinent("");
+  controller.update([{ ...berlin, country: "Changed" }, paris]); controller.select(1);
+  assert.equal(dom.activeElement!.attributes.get("aria-label"), "Red marker");
+  assert.equal(markers[0].options.element.style.backgroundColor, markerColors[1].value);
+  assert.equal(markers.length, 2);
 });
