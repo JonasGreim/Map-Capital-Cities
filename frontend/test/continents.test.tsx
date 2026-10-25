@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { CapitalActions } from "../src/CapitalActions";
 import { CapitalList, filterCapitals } from "../src/CapitalList";
 import { createCapital, getCapitals, resetCapitals, updateCapital, type Capital } from "../src/api";
 import { matchesContinent, type ContinentFilter } from "../src/continent-filter";
@@ -92,7 +93,7 @@ test("known and unknown creates, country edits, deletion, reload and reset recon
 });
 
 test("native labeled select defaults to all continents with honest total and matching counts", () => {
-  const html = renderToStaticMarkup(<CapitalList capitals={capitals} loading={false} error={null} onRetry={async () => {}} />);
+  const html = renderToStaticMarkup(<CapitalActions><CapitalList capitals={capitals} loading={false} error={null} onRetry={async () => {}} /></CapitalActions>);
   assert.match(html, /<label for="continent-filter">Continent<\/label><select/);
   assert.match(html, /All continents/);
   assert.equal((html.match(/<option /g) ?? []).length, 8);

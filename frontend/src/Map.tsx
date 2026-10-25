@@ -2,10 +2,12 @@ import mapboxgl from "mapbox-gl";
 import { useEffect, useRef, useState } from "react";
 import { useCapitalStore } from "./capital-store";
 import { createCapitalMarkers } from "./capital-markers";
+import { useCapitalActions } from "./CapitalActions";
 
 const token = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 
 export function Map() {
+  const { toggleActions, closeActions } = useCapitalActions();
   const el = useRef<HTMLDivElement>(null);
   const [mapError, setMapError] = useState(false);
   const [resourceError, setResourceError] = useState(false);
@@ -52,7 +54,7 @@ export function Map() {
       // A closing/deleted popup must not clear a newer, batched list selection.
       if (id === null && state.selectedCapitalId !== closedId) return;
       state.selectCapital(id, "map");
-    });
+    }, { onOpen: toggleActions, onClose: closeActions });
     markers.current = capitalMarkers;
     const observer = new ResizeObserver(() => { map.resize(); capitalMarkers.resize(); });
     observer.observe(el.current);
@@ -66,7 +68,7 @@ export function Map() {
       markers.current = undefined;
       map.remove();
     };
-  }, []);
+  }, [toggleActions, closeActions]);
 
   useEffect(() => { markers.current?.setContinent(continent); }, [continent]);
   useEffect(() => {

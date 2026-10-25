@@ -13,8 +13,16 @@ export function CapitalDialog({ title, busy, onClose, children }: {
     element.showModal();
     return () => {
       element.close();
-      if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true });
-      else document.getElementById("add-capital")?.focus({ preventScroll: true });
+      // Reconcile the confirmed mutation first: a popup trigger may disappear
+      // after deletion or a country edit that excludes it from the filter.
+      queueMicrotask(() => {
+        const usable = (target: Element | null): target is HTMLElement => target instanceof HTMLElement
+          && target.isConnected && !target.closest("[hidden], [inert]") && !target.matches(":disabled")
+          && target.getClientRects().length > 0;
+        const target = [previous, document.getElementById("add-capital"), document.querySelector(".mapboxgl-canvas"),
+          document.getElementById("world-map")].find(usable);
+        target?.focus({ preventScroll: true });
+      });
     };
   }, []);
 

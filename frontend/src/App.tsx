@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CapitalList } from "./CapitalList";
 import { Map } from "./Map";
 import { useCapitalStore } from "./capital-store";
+import { CapitalActions } from "./CapitalActions";
 
 export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -19,7 +20,7 @@ export function App() {
           </div>
         </a>
       </header>
-      <div className={`layout${sidebarOpen ? "" : " sidebar-collapsed"}`}>
+      <CapitalActions><div className={`layout${sidebarOpen ? "" : " sidebar-collapsed"}`}>
         <CapitalList capitals={capitals} loading={loading} error={error} onRetry={fetchCapitals} collapsed={!sidebarOpen} />
         <section id="world-map" className="map-panel" aria-label="World map" tabIndex={-1}>
           <button type="button" className="sidebar-toggle secondary" aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
@@ -28,7 +29,7 @@ export function App() {
           </button>
           <Map />
         </section>
-      </div>
+      </div></CapitalActions>
     </main>
   );
 }

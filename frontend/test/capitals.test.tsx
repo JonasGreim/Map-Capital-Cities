@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { CapitalActions } from "../src/CapitalActions";
 import { CapitalList, filterCapitals } from "../src/CapitalList";
 import { getCapitals } from "../src/api";
 import { useCapitalStore } from "../src/capital-store";
@@ -121,7 +122,7 @@ test("store exposes failures, clears the error on retry and replaces data on rel
 // Render each list state without needing a browser or Mapbox token.
 // The actual click/lifecycle/layout checks are performed separately in Playwright.
 test("list renders country and capital names using semantic list items", () => {
-  const html = renderToStaticMarkup(<CapitalList capitals={[berlin]} loading={false} error={null} onRetry={async () => {}} />);
+  const html = renderToStaticMarkup(<CapitalActions><CapitalList capitals={[berlin]} loading={false} error={null} onRetry={async () => {}} /></CapitalActions>);
   assert.match(html, /<h2[^>]*>Countries &amp; capitals<\/h2>/);
   assert.match(html, /<ul[^>]*><li[^>]*><button[^>]*>.*class="capital-name">Berlin<\/span><span class="country">Germany<\/span>/);
   assert.match(html, /aria-label="Actions for Berlin" aria-expanded="false"/);
@@ -131,14 +132,14 @@ test("list renders country and capital names using semantic list items", () => {
 
 test("skip link is available before the long list, including loading and error states", () => {
   for (const state of [{ loading: false, error: null }, { loading: true, error: null }, { loading: false, error: "Unable to load capitals." }]) {
-    const html = renderToStaticMarkup(<CapitalList capitals={[berlin]} {...state} onRetry={async () => {}} />);
+    const html = renderToStaticMarkup(<CapitalActions><CapitalList capitals={[berlin]} {...state} onRetry={async () => {}} /></CapitalActions>);
     assert.match(html, /<a[^>]*href="#world-map"[^>]*>Skip to map<\/a>/);
     assert.ok(html.indexOf("Skip to map") < html.indexOf('aria-label="Capital results"'));
   }
 });
 
 test("list announces loading and hides stale data", () => {
-  const html = renderToStaticMarkup(<CapitalList capitals={[berlin]} loading={true} error={null} onRetry={async () => {}} />);
+  const html = renderToStaticMarkup(<CapitalActions><CapitalList capitals={[berlin]} loading={true} error={null} onRetry={async () => {}} /></CapitalActions>);
   assert.match(html, /aria-busy="true"/);
   assert.match(html, /role="region" aria-label="Capital results" aria-busy="true" tabindex="0"/);
   assert.match(html, /role="status">Loading capitals…/);
@@ -146,11 +147,11 @@ test("list announces loading and hides stale data", () => {
 });
 
 test("list explains an empty result", () => {
-  assert.match(renderToStaticMarkup(<CapitalList capitals={[]} loading={false} error={null} onRetry={async () => {}} />), /role="status">No capitals available yet\./);
+  assert.match(renderToStaticMarkup(<CapitalActions><CapitalList capitals={[]} loading={false} error={null} onRetry={async () => {}} /></CapitalActions>), /role="status">No capitals available yet\./);
 });
 
 test("list announces errors and renders an accessible retry button", () => {
-  const html = renderToStaticMarkup(<CapitalList capitals={[]} loading={false} error="Unable to load capitals." onRetry={async () => {}} />);
+  const html = renderToStaticMarkup(<CapitalActions><CapitalList capitals={[]} loading={false} error="Unable to load capitals." onRetry={async () => {}} /></CapitalActions>);
   assert.match(html, /role="alert">Unable to load capitals\./);
   assert.match(html, /<button type="button">Try again<\/button>/);
 });
@@ -166,7 +167,7 @@ test("search matches trimmed, case-insensitive country or capital without changi
 });
 
 test("collapsed sidebar uses native hidden while retaining the search and CRUD surface", () => {
-  const html = renderToStaticMarkup(<CapitalList capitals={[berlin]} loading={false} error={null} collapsed onRetry={async () => {}} />);
+  const html = renderToStaticMarkup(<CapitalActions><CapitalList capitals={[berlin]} loading={false} error={null} collapsed onRetry={async () => {}} /></CapitalActions>);
   assert.match(html, /<aside id="capital-sidebar" class="sidebar" hidden=""/);
   assert.match(html, /<label[^>]*for="capital-search">Search countries or capitals/);
   assert.match(html, /type="search"[^>]*aria-describedby="search-results-count"/);

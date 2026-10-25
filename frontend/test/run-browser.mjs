@@ -8,6 +8,7 @@ import { verifyContinents } from "./continents.browser.mjs";
 import { verifyReset } from "./reset.browser.mjs";
 import { verifySidebarPolish } from "./sidebar-polish.browser.mjs";
 import { verifyBranding } from "./branding.browser.mjs";
+import { verifyPopupActions } from "./popup-actions.browser.mjs";
 
 // Reuse externally supplied Playwright tooling; no extra project dependency.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
@@ -24,10 +25,10 @@ try {
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
     args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
   });
-  for (const [name, verify] of [["branding", verifyBranding], ["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents], ["sidebar-polish", verifySidebarPolish]]) {
-    const context = await browser.newContext();
+  for (const [name, verify] of [["branding", verifyBranding], ["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents], ["sidebar-polish", verifySidebarPolish], ["popup-actions", verifyPopupActions]]) {
+    const context = await browser.newContext({ hasTouch: name === "popup-actions" });
     try {
-      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", name === "sidebar-polish" ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
+      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", ["sidebar-polish", "popup-actions"].includes(name) ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
     } finally { await context.close(); }
   }
 } finally {

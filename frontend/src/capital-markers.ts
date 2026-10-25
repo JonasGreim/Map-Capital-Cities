@@ -21,6 +21,7 @@ type Entry = {
   country?: HTMLParagraphElement;
   flag?: HTMLSpanElement;
   coordinates?: HTMLParagraphElement;
+  actions?: HTMLButtonElement;
   focusColor?: () => void;
   content?: HTMLDivElement;
   disposePopup?: (returnFocus?: boolean, notify?: boolean) => void;
@@ -39,7 +40,8 @@ export function capitalCamera(capital: Capital, height: number, popupHeight: num
 const coordinates = (capital: Capital) => `${capital.latitude.toFixed(4)}, ${capital.longitude.toFixed(4)}`;
 
 // Each ID owns its marker and in-memory color for as long as it is in the data.
-export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelectionChange: (id: number | null, closedId?: number) => void = () => {}) {
+export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelectionChange: (id: number | null, closedId?: number) => void = () => {},
+  actions?: { onOpen: (capital: Capital, trigger: HTMLButtonElement) => void; onClose: (trigger: HTMLButtonElement) => void }) {
   const entries = new globalThis.Map<number, Entry>();
   let active: Entry | undefined;
   let continent: ContinentFilter = "";
@@ -125,7 +127,18 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
     });
     colors.append(label, swatches);
     content.append(heading, country, location, colors, flag);
-    const popup = new api.Popup({ offset: 24, anchor: "bottom", maxWidth: "248px", focusAfterOpen: false })
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.id = `popup-actions-${entry.capital.id}`;
+    trigger.className = "actions-trigger popup-actions-trigger";
+    trigger.setAttribute("aria-label", `Map actions for ${entry.capital.name}`);
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>';
+    const showActions = (event: Event) => { event.stopPropagation(); actions?.onOpen(entry.capital, trigger); };
+    trigger.addEventListener("click", showActions);
+    listeners.push(() => { trigger.removeEventListener("click", showActions); actions?.onClose(trigger); });
+    content.append(trigger);
+    const popup = new api.Popup({ offset: 24, anchor: "bottom", maxWidth: "288px", focusAfterOpen: false })
       .setLngLat([entry.capital.longitude, entry.capital.latitude])
       .setDOMContent(content);
     const escape = (event: KeyboardEvent) => {
@@ -148,6 +161,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
       entry.country = undefined;
       entry.flag = undefined;
       entry.coordinates = undefined;
+      entry.actions = undefined;
       entry.focusColor = undefined;
       entry.content = undefined;
       entry.disposePopup = undefined;
@@ -165,6 +179,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
     entry.country = country;
     entry.flag = flag;
     entry.coordinates = location;
+    entry.actions = trigger;
     entry.content = content;
     entry.disposePopup = (restoreFocus = true, notifySelection = true) => { returnFocus = restoreFocus; notify = notifySelection; popup.remove(); };
     active = entry;
@@ -263,6 +278,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
         entry.popup?.getElement()?.setAttribute("aria-label", `${capital.name}, ${capital.country}: marker color`);
         if (entry.heading) entry.heading.textContent = capital.name;
         if (entry.country) entry.country.textContent = capital.country;
+        entry.actions?.setAttribute("aria-label", `Map actions for ${capital.name}`);
         if (entry.coordinates) {
           entry.coordinates.textContent = coordinates(capital);
           entry.coordinates.setAttribute("aria-label", `Latitude ${capital.latitude}, longitude ${capital.longitude}`);

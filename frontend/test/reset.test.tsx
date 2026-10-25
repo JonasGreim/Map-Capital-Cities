@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { resetCapitals } from "../src/api";
 import { useCapitalStore } from "../src/capital-store";
 import { ResetCapitalsDialog } from "../src/ResetCapitalsDialog";
+import { CapitalActions } from "../src/CapitalActions";
 import { CapitalList } from "../src/CapitalList";
 
 const berlin = { id: 1, name: "Berlin", country: "Germany", latitude: 52.52, longitude: 13.405 };
@@ -75,7 +76,7 @@ test("HTTP/network/invalid response failures preserve data, selection and colors
 test("sidebar replaces refresh with adjacent reset; opening confirmation performs no write", () => {
   let writes = 0;
   const operation = async () => { writes++; };
-  const sidebar = renderToStaticMarkup(<CapitalList capitals={[berlin]} loading={false} error={null} onRetry={operation} />);
+  const sidebar = renderToStaticMarkup(<CapitalActions><CapitalList capitals={[berlin]} loading={false} error={null} onRetry={operation} /></CapitalActions>);
   assert.match(sidebar, /Add capital<\/button><button id="reset-capitals"/);
   assert.doesNotMatch(sidebar, /Refresh list/);
   const dialog = renderToStaticMarkup(<ResetCapitalsDialog onReset={operation} onReload={operation} onCancel={() => {}} />);
