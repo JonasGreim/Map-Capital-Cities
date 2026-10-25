@@ -315,6 +315,7 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
         const close = document.querySelector(".mapboxgl-popup-close-button").getBoundingClientRect();
         const menu = document.querySelector(".capital-actions-menu").getBoundingClientRect();
         return title.right <= trigger.left && trigger.right <= close.left && trigger.width >= 40 && trigger.height >= 40
+          && Math.abs(trigger.top - close.top) <= 2 && Math.abs(trigger.height - close.height) <= 2
           && menu.left >= 0 && menu.right <= innerWidth && menu.top >= 0 && menu.bottom <= innerHeight;
       }), true);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);

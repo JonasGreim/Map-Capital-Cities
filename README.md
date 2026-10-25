@@ -46,8 +46,13 @@ npm test               # backend tests plus frontend API, Zustand and list-state
 git diff --check
 ```
 
-CI runs `npm ci`, `npm run check` and `npm test` on PRs and main pushes,
-using the pinned runtime without secrets or a database. Import tests mock REST
+CI runs `npm ci`, `npm run check`, backend tests, frontend unit tests and Vite
+branding integration in separately named steps on PRs and main pushes, using the
+pinned runtime without secrets or a database. `npm test` still runs all suites;
+the frontend scripts `test:unit` and `test:branding` expose the same split locally.
+The job is limited to 10 minutes, with shorter per-step limits; Node tests and
+branding HTTP requests also have timeouts. Branding logs identify dev, build,
+preview and cleanup phases. Import tests mock REST
 Countries; backend API tests inject a fake DB. Frontend tests use the existing
 Node test runner/tsx with mocked fetch and React server rendering; they need
 neither a browser nor a Mapbox token. The optional PostgreSQL suite skips
@@ -535,8 +540,15 @@ The header brand is a native home link to `/`; it reloads the app and restores i
 initial state. Its globe uses a short hover/focus scale transition, disabled by
 reduced-motion preferences. The tab title is **Map Capital Cities** and the public
 SVG favicon reuses the header globe with thicker strokes for small sizes.
-`branding.test.tsx` checks the document and favicon over HTTP in Vite dev and a
-temporary production build/preview. `branding.browser.mjs` verifies SVG decoding,
+`branding.test.ts` checks the document and favicon over HTTP in Vite dev and a
+temporary production build/preview. Dev closes before build/preview starts, each
+phase owns its cleanup, and Vite's own server `close()` APIs release sockets and
+process listeners. The dev HTTP test uses a fresh temporary cache and disables
+speculative JS transforms and dependency optimization only in that test: it reads
+HTML/SVG and never executes application JS. This avoids a cold-cache shutdown
+race where the plugin container waits on transforms waiting on the optimizer.
+The application Vite config and browser coverage remain unchanged.
+`branding.browser.mjs` verifies SVG decoding,
 title, native mouse/keyboard navigation, focus, motion and layout at the three
 standard viewport sizes. It runs in the existing browser runner and can also run
 against production preview or an isolated Firefox Page via `verifyBranding`.
