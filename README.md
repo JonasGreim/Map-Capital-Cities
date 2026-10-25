@@ -266,8 +266,19 @@ Countries key and database URL stay server-side. A production host must route
 `/capital` to Fastify on the same origin; the static build and `vite preview`
 do not provide the development proxy.
 
-The English list shows each country and capital, preserving API order. During a
-request it announces “Loading capitals…”. An empty array shows “No capitals
+The English sidebar shows each capital name above its country, preserving API order.
+Use the chevron button at the map’s upper-left corner to collapse or expand the
+sidebar. Collapsing keeps the search and list state and frees space for the map;
+hidden sidebar controls are excluded from keyboard navigation. The map remains
+mounted and retains its view and marker colors.
+
+Search countries or capitals using the labeled search field. Matching ignores case
+and surrounding whitespace and filters only the list; all map markers remain.
+The count beside the heading is the full dataset total, while search reports the
+matching count out of that total, including a clear no-matches message.
+The **Skip to map** link becomes visible on keyboard focus.
+
+During a request it announces “Loading capitals…”. An empty array shows “No capitals
 available yet.” Errors show a readable message and a keyboard-accessible “Try
 again” button, which fetches again and clears the previous error. Existing data
 is retained in the store during reload/failure but hidden by the status message;
@@ -277,8 +288,9 @@ a successful response replaces it, including when the new array is empty.
 
 Choose **Add capital** above the list to open the form. Enter a capital name,
 country name, latitude and longitude, then choose **Create capital**. Choose
-**Edit** beside a list entry to change the same four fields and **Save changes**.
-Choose **Delete** beside an entry, review the capital/country in the confirmation,
+**Actions for [capital]** (the three-dot button) beside an entry, then **Edit**
+to change the same four fields and **Save changes**. Choose **Delete** from that
+actions panel and review the capital/country in the confirmation,
 then choose **Delete capital**. **Cancel** or Escape closes either dialog without
 writing. While a request is pending, controls and dismissal are disabled to avoid
 duplicate submissions. Success is announced above the list.
@@ -302,7 +314,10 @@ Mapbox marker lifecycle consume the same state: names/popups and coordinates
 update, deleted markers/popups disappear, and the map instance and other marker
 colors remain intact. Reload/refresh retrieves PostgreSQL data; other browser
 sessions are synchronized only when refreshed. Dialogs support keyboard operation,
-restore focus to the initiating control, and fall back to Add capital after deletion.
+restore focus to the initiating control, and fall back to Add capital after deletion
+or when an edited entry no longer matches the search. Actions panels open with
+Enter or Space; Tab moves through Edit and Delete, Escape closes and restores
+focus to the three-dot button, and leaving the row or clicking outside closes them.
 
 **Persistence limitation:** CRUD writes are stored in PostgreSQL, but REST Countries
 is reimported on **every backend startup**. Deleted imported capitals can reappear
@@ -316,7 +331,8 @@ in a real isolated Chromium session against disposable PostgreSQL.
 
 On desktop the list scrolls beside a map that fills the remaining space. At
 700px and below they stack, with a bounded, keyboard-scrollable list above a
-full-width map. Mapbox initializes independently of capital data; a resize
+full-width map. The collapse/expand button stays at the map’s upper-left corner.
+Mapbox initializes independently of capital data; a resize
 observer keeps its canvas sized to its panel and is disconnected along with the
 map on unmount. A missing Mapbox token shows setup guidance while the list still
 works.
@@ -339,7 +355,8 @@ Markers can overlap at world zoom levels; zoom in to distinguish nearby capitals
 or use keyboard focus to access overlapping markers. No clustering or positional
 offsets are applied. Mapbox's globe projection can hide capitals on the far side;
 drag the map to reach them. Map tiles require a working Mapbox token and network.
-Frontend CRUD remains reserved for #6.
+Sidebar rows remain informational; list-to-map navigation, flags, marker/popup
+redesign and Reset to default are reserved for later phases.
 
 ### Frontend verification
 
@@ -367,6 +384,16 @@ For a real browser check after backend startup:
    popups. A full page reload should reset colors.
 5. Inspect browser console errors. An intentionally mocked HTTP failure is
    expected during the error check; normal loading should have no errors.
+
+`frontend/test/sidebar.browser.mjs` exports `verifySidebar(page, baseURL)` for an
+isolated Playwright Page. With the frontend running and Playwright supplied by the
+browser tooling, run `await verifySidebar(page, "http://127.0.0.1:5173")` (use the
+actual Vite port). It intercepts **all** capital reads/writes with controlled
+fixtures and exercises 1440px, 390px and 320px layouts, sidebar/search state,
+keyboard menus/dialogs, pending/conflict CRUD, loading/error/retry/empty states,
+canvas identity, marker dimensions and overflow. It requires a working Mapbox
+public token/network to verify the real canvas. This browser suite is separate
+from `npm test`; no Playwright project dependency is installed.
 
 The isolated browser MCP tools configured in `.codex/config.toml` can run these
 checks locally with the root `.env`. Browser checks remain separate from CI and

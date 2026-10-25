@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CapitalList } from "../src/CapitalList";
+import { CapitalList, filterCapitals } from "../src/CapitalList";
 import { getCapitals } from "../src/api";
 import { useCapitalStore } from "../src/capital-store";
 
@@ -123,9 +123,9 @@ test("store exposes failures, clears the error on retry and replaces data on rel
 test("list renders country and capital names using semantic list items", () => {
   const html = renderToStaticMarkup(<CapitalList capitals={[berlin]} loading={false} error={null} onRetry={async () => {}} />);
   assert.match(html, /<h2[^>]*>Countries &amp; capitals<\/h2>/);
-  assert.match(html, /<ul[^>]*><li><span[^>]*>Germany<\/span><span[^>]*>Berlin<\/span>/);
-  assert.match(html, /aria-label="Edit Berlin"/);
-  assert.match(html, /aria-label="Delete Berlin"/);
+  assert.match(html, /<ul[^>]*><li[^>]*><div[^>]*><span[^>]*>Berlin<\/span><span[^>]*>Germany<\/span>/);
+  assert.match(html, /aria-label="Actions for Berlin" aria-expanded="false"/);
+  assert.doesNotMatch(html, />Edit<|>Delete</);
   assert.match(html, /aria-label="1 capital"/);
 });
 
@@ -153,4 +153,23 @@ test("list announces errors and renders an accessible retry button", () => {
   const html = renderToStaticMarkup(<CapitalList capitals={[]} loading={false} error="Unable to load capitals." onRetry={async () => {}} />);
   assert.match(html, /role="alert">Unable to load capitals\./);
   assert.match(html, /<button type="button">Try again<\/button>/);
+});
+
+test("search matches trimmed, case-insensitive country or capital without changing canonical data", () => {
+  const prague = { ...berlin, id: 2, name: "Prague", country: "Czechia" };
+  const capitals = [berlin, prague];
+  for (const query of ["  bErLiN  ", "GERM", "lin"]) assert.deepEqual(filterCapitals(capitals, query), [berlin]);
+  assert.deepEqual(filterCapitals(capitals, "czech"), [prague]);
+  assert.deepEqual(filterCapitals(capitals, "   "), capitals);
+  assert.deepEqual(filterCapitals(capitals, "not a country"), []);
+  assert.deepEqual(capitals, [berlin, prague]);
+});
+
+test("collapsed sidebar uses native hidden while retaining the search and CRUD surface", () => {
+  const html = renderToStaticMarkup(<CapitalList capitals={[berlin]} loading={false} error={null} collapsed onRetry={async () => {}} />);
+  assert.match(html, /<aside id="capital-sidebar" class="sidebar" hidden=""/);
+  assert.match(html, /<label[^>]*for="capital-search">Search countries or capitals/);
+  assert.match(html, /type="search"[^>]*aria-describedby="search-results-count"/);
+  assert.match(html, /id="search-results-count"[^>]*role="status">1 of 1 capital/);
+  assert.match(html, /aria-label="Actions for Berlin" aria-expanded="false"/);
 });
