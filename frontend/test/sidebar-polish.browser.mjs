@@ -1,4 +1,4 @@
-/* global document, window, innerWidth, innerHeight, KeyboardEvent, Event, structuredClone */
+/* global document, window, innerWidth, innerHeight, getComputedStyle, KeyboardEvent, Event, structuredClone */
 import assert from "node:assert/strict";
 
 // Focused Issue #26 coverage. Every capital request is intercepted, including
@@ -230,7 +230,7 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
     }
     window.setTimeout = (fn, delay, ...args) => {
       const id = schedule(() => { window.noticeTimers.delete(id); fn(...args); }, delay);
-      if (delay === 4000) window.noticeTimers.add(id);
+      if (delay === 3000) window.noticeTimers.add(id);
       return id;
     };
     window.clearTimeout = id => { window.noticeTimers.delete(id); cancel(id); };
@@ -257,7 +257,7 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
   assert.equal(await notice.textContent(), "Capital updated.");
   await page.clock.fastForward(1600); // Past the original create timer.
   assert.equal(await notice.textContent(), "Capital updated.");
-  await page.clock.fastForward(1900);
+  await page.clock.fastForward(900);
   assert.equal(await notice.textContent(), "Capital updated.");
   await page.clock.fastForward(600);
   assert.equal(await notice.textContent(), "");
@@ -266,7 +266,7 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
   await button("Delete capital").click();
   await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
   assert.equal(await notice.textContent(), "Capital deleted.");
-  await page.clock.fastForward(4100);
+  await page.clock.fastForward(3100);
   assert.equal(await notice.textContent(), "");
   for (const [width, height] of [[1440, 900], [390, 844], [320, 568]]) {
     await page.setViewportSize({ width, height });
@@ -282,12 +282,12 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
     assert.equal(await notice.evaluate(el => {
       const r = el.getBoundingClientRect();
       return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
-        && [...document.querySelectorAll(".list-search, .list-continent, .list-actions, .map-panel")].every(control => {
-          const b = control.getBoundingClientRect(); return r.bottom <= b.top || r.top >= b.bottom || r.right <= b.left || r.left >= b.right;
-        });
+        && Math.abs(r.left + r.width / 2 - innerWidth / 2) < 1
+        && Math.abs(innerHeight - r.bottom - 24) < 1
+        && getComputedStyle(el).pointerEvents === "none";
     }), true);
     if (screenshotDirectory) await page.screenshot({ path: `${screenshotDirectory}/toast-${width}.png`, fullPage: true });
-    await page.clock.fastForward(4100);
+    await page.clock.fastForward(3100);
     assert.equal(await notice.textContent(), "");
   }
   failWrite = true;

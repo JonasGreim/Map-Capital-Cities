@@ -96,7 +96,7 @@ export function CapitalActions({ children }: { children: ReactNode }) {
   }, [dialog, closeDialog, cancelPick]);
   useEffect(() => {
     if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 4000);
+    const timer = window.setTimeout(() => setNotice(""), 3000);
     return () => window.clearTimeout(timer);
   }, [notice]);
   const capital = capitals.find(capital => capital.id === actions?.capital.id);

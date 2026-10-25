@@ -76,8 +76,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, .list-content:f
 .secondary:active { background: #daedf7; }
 button:disabled { opacity: 0.65; cursor: wait; }
 .search-results-count { padding: 0 1.75rem 0.75rem; font-size: 0.85rem; color: #426079; }
-.mutation-notice { position: fixed; z-index: 4; top: 0.75rem; right: 0.75rem; max-width: min(22rem, calc(100% - 1.5rem)); pointer-events: none; }
-.mutation-notice:not(:empty) { padding: 0.65rem 1rem; border: 1px solid #9bcacb; border-radius: 0.5rem; background: #ecf8f6; color: #165456; box-shadow: 0 3px 12px #12334b1a; font-size: 0.85rem; }
+/* Future bottom navigation supplies its content height, excluding the safe area. */
+.mutation-notice { position: fixed; z-index: 4; left: 0; right: 0; bottom: calc(24px + env(safe-area-inset-bottom, 0px) + var(--bottom-navigation-height, 0px)); width: max-content; max-width: min(22rem, calc(100% - 2rem)); margin-inline: auto; pointer-events: none; }
+.mutation-notice:not(:empty) { padding: 0.65rem 1rem; border: 1px solid #73abad; border-radius: 0.5rem; background: #ecf8f6; color: #123f42; box-shadow: 0 4px 16px #12334b33; font-size: 0.85rem; }
+/* Becoming nonempty starts one entrance; replacing visible text keeps its timeline. */
+.mutation-notice:not(:empty) { animation: mutation-notice-enter 160ms cubic-bezier(0.23, 1, 0.32, 1); }
+@keyframes mutation-notice-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mutation-notice:not(:empty) { animation-duration: 80ms; }
+}
 .row-actions { position: relative; flex: 0 0 auto; }
 .actions-trigger { display: grid; place-items: center; width: 2.75rem; padding: 0; border-color: transparent; background: transparent; color: #264e69; }
 .actions-trigger svg { width: 1.15rem; height: 1.15rem; fill: currentColor; }
