@@ -21,7 +21,8 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
   const results = useRef<HTMLDivElement>(null);
   const retryButton = useRef<HTMLButtonElement>(null);
   const retryPending = useRef(false);
-  const { mutating, saveCapital, removeCapital } = useCapitalStore();
+  const { mutating, saveCapital, removeCapital, selectedCapitalId, selectionSource, selectionVersion, selectCapital } = useCapitalStore();
+  const selectedRow = useRef<HTMLButtonElement>(null);
   const [editor, setEditor] = useState<{ capital?: Capital } | null>(null);
   const [deleting, setDeleting] = useState<Capital | null>(null);
   const [notice, setNotice] = useState("");
@@ -31,6 +32,19 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
   const actionsButton = useRef<HTMLButtonElement>(null);
   const firstAction = useRef<HTMLButtonElement>(null);
   const filtered = filterCapitals(capitals, query);
+
+  useEffect(() => {
+    // Reveal only within the list's own scroller. Never move the page, steal
+    // focus, open the sidebar or change a search on marker activation.
+    if (selectionSource !== "map" || collapsed) return;
+    const row = selectedRow.current;
+    const scroller = results.current;
+    if (!row || !scroller) return;
+    const bounds = row.getBoundingClientRect();
+    const viewport = scroller.getBoundingClientRect();
+    if (bounds.top < viewport.top) scroller.scrollTop += bounds.top - viewport.top;
+    else if (bounds.bottom > viewport.bottom) scroller.scrollTop += bounds.bottom - viewport.bottom;
+  }, [selectedCapitalId, selectionSource, selectionVersion, collapsed]);
 
   useEffect(() => {
     if (actionsId === null) return;
@@ -103,10 +117,14 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
         ) : (
           <ul className="capital-list">
             {filtered.map((capital) => (
-              <li key={capital.id} data-actions-open={actionsId === capital.id || undefined}
+              <li key={capital.id} data-selected={selectedCapitalId === capital.id || undefined} data-actions-open={actionsId === capital.id || undefined}
                 onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setActionsId(null); }}>
-                <div className="capital-label"><span className="capital-name">{capital.name}</span>
-                <span className="country">{capital.country}</span></div>
+                <button type="button" className="capital-label" ref={selectedCapitalId === capital.id ? selectedRow : undefined}
+                  aria-label={`Show ${capital.name}, ${capital.country} on map`} aria-pressed={selectedCapitalId === capital.id}
+                  onClick={() => { setActionsId(null); selectCapital(capital.id); }}>
+                  <span className="capital-name">{capital.name}</span>
+                  <span className="country">{capital.country}</span>
+                </button>
                 <div className="row-actions" ref={actionsId === capital.id ? actionsPanel : undefined}>
                   <button ref={actionsId === capital.id ? actionsButton : undefined} id={`capital-actions-${capital.id}`} type="button" className="actions-trigger" disabled={mutating}
                     aria-label={`Actions for ${capital.name}`} aria-expanded={actionsId === capital.id} aria-controls={actionsId === capital.id ? `capital-options-${capital.id}` : undefined}

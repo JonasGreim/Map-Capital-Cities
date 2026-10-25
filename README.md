@@ -337,33 +337,50 @@ observer keeps its canvas sized to its panel and is disconnected along with the
 map on unmount. A missing Mapbox token shows setup guidance while the list still
 works.
 
+Select a capital row with a click, Enter or Space to fly to its coordinates at a
+regional zoom and open its popup. Selecting it again repeats the navigation;
+choosing another capital interrupts the previous flight. Reduced-motion settings
+make navigation immediate. The camera measures the map/popup bounds; on narrow
+screens the map scrolls into view. The three-dot actions button and its Edit/Delete
+controls operate independently and do not navigate.
+
 Each valid capital in the shared store has a square **32 × 32 CSS pixel** marker
-at its longitude/latitude. Click a marker, or focus it with Tab and press Enter
-or Space, to open its capital/country popup. Choose Teal, Red, Purple or Gold in
-the labeled “Marker color” select to update only that marker immediately. The
-selected color also has a text name. Escape or the close button closes the popup
-and returns keyboard focus to its marker; clicking the map also closes it.
+with a location glyph at its longitude/latitude. Click a marker, or focus it with
+Tab and press Enter or Space, to open its popup and select the matching list row.
+Selection is indicated by the highlighted row, marker outline and pressed button
+state. Marker activation reveals a matching row inside the list scroller without
+moving page focus, opening a closed sidebar or changing the search query.
+
+Popups show the capital, country, latitude and longitude. Choose one of the named
+Teal, Red, Purple or Gold swatch buttons in the “Marker color” group to update only
+that marker immediately. The active swatch has a checkmark and a pressed state.
+Escape or the close button closes the popup, clears selection and returns keyboard
+focus to its marker; clicking the map also closes it. Focus moved elsewhere is
+respected. Long popup content scrolls within the available map height.
 
 Colors are in-memory frontend state keyed by capital ID. They survive popup
-reopening, React rerenders and capital reloads while the map is mounted. Removed
-capitals release their markers and colors; new capitals start Teal. A page reload
+reopening, list filtering, sidebar toggles, React rerenders, capital edits and
+reloads while the map is mounted. Edited popup text/coordinates update immediately;
+a selected coordinate edit moves the camera to the new location. Removed capitals
+release their markers, colors and selection; new capitals start Teal. A page reload
 or map unmount resets colors. Nothing is saved to PostgreSQL or localStorage.
-The map stays mounted during data changes, preserving the current view. Markers,
-popups, event listeners and the resize observer are cleaned up on unmount.
+The map stays mounted during these interactions. Markers, popups, event listeners
+and the resize observer are cleaned up on unmount. Map initialization/load failures
+show readable feedback while independent list CRUD remains available.
 
 Markers can overlap at world zoom levels; zoom in to distinguish nearby capitals,
-or use keyboard focus to access overlapping markers. No clustering or positional
-offsets are applied. Mapbox's globe projection can hide capitals on the far side;
-drag the map to reach them. Map tiles require a working Mapbox token and network.
-Sidebar rows remain informational; list-to-map navigation, flags, marker/popup
-redesign and Reset to default are reserved for later phases.
+or select a capital from the list or keyboard. No clustering or positional offsets
+are applied. Mapbox's globe projection can hide capitals on the far side; drag the
+map or select a list row to reach them. Map tiles require a working Mapbox token
+and network. Flags, city photos and Reset to default remain outside this phase.
 
 ### Frontend verification
 
 `npm test -w frontend` covers the API contract and failures, request sharing,
 loading/error transitions, retry/reload and the rendered list states. Marker tests
 use small DOM/Mapbox doubles to cover coordinates, square CSS dimensions, popup
-context, independent colors, reopening, data updates, removal and cleanup. These
+context, independent colors, reopening, selection/controller navigation, reduced
+motion, data updates, removal and cleanup. These
 unit tests do not establish database, native keyboard or browser integration.
 
 For a real browser check after backend startup:
@@ -394,6 +411,18 @@ keyboard menus/dialogs, pending/conflict CRUD, loading/error/retry/empty states,
 canvas identity, marker dimensions and overflow. It requires a working Mapbox
 public token/network to verify the real canvas. This browser suite is separate
 from `npm test`; no Playwright project dependency is installed.
+
+`frontend/test/map-selection.browser.mjs` exports
+`verifyMapSelection(page, baseURL, screenshotDirectory?)` for another fresh isolated
+Playwright Page. It mocks all capital reads/writes and uses the real Mapbox map at
+1440×900, 390×844 and 320×568. It verifies list/marker selection, correct navigation,
+interrupted/repeated flights, popup bounds/focus/Escape, named swatches, search and
+closed-sidebar behavior, actions without navigation, selected edits/deletion,
+refresh/color persistence, pan/zoom, reduced motion, 32×32 markers, retained
+canvas/marker objects, overflow and console errors. The optional screenshot
+directory must exist and should be outside the repository. Both browser fixtures
+are separate from CI and require a local frontend, Playwright tooling and Mapbox
+network access; their API mocks do not establish PostgreSQL integration.
 
 The isolated browser MCP tools configured in `.codex/config.toml` can run these
 checks locally with the root `.env`. Browser checks remain separate from CI and
