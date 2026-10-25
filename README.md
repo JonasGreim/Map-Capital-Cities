@@ -22,7 +22,7 @@ nvm install             # reads .nvmrc; nvm use for an existing installation
 npm install --global npm@11.19.1
 cp .env.example .env   # fill in RESTCOUNTRIES_API_KEY and VITE_MAPBOX_TOKEN
 npm ci
-npm run db             # Postgres on :5432; required for a successful /health
+npm run db             # Postgres on :5432; wait for "ready to accept connections"
 npm run dev            # UI http://localhost:5173, API http://localhost:3001 (GET /health -> {"ok":true})
 ```
 
@@ -34,6 +34,42 @@ produces HTTP 500. The API defaults to port 3001 (`PORT` can override it).
 No Docker or Node? Use a GitHub Codespace (Postgres included) and add both keys as Codespaces secrets.
 The devcontainer setup installs the pinned Node/npm versions and runs `npm ci`.
 Use `nvm use` in an already-open terminal after setup.
+
+### Local development troubleshooting
+
+Run `nvm use`, then check `node -v` (**24.22.1**) and `npm -v` (**11.19.1**)
+in the terminal that starts development. Start PostgreSQL with `npm run db`;
+`docker compose logs db` should report `database system is ready to accept
+connections`. Check that the root `.env` uses the matching database, credentials
+and host/port (the regular Compose service exposes `localhost:5432`).
+
+`npm run dev` starts both workspaces concurrently. Vite can be ready before the
+API: the backend waits for PostgreSQL, completes the REST Countries import, then
+prints `API on http://localhost:3001` (or your `PORT`). Temporary Vite
+`ECONNREFUSED` messages before that line are expected. Retry in the UI or reload
+once the API is ready; verify `curl -i http://localhost:3001/health` and
+`curl -i http://localhost:3001/capital`. Persistent refusals after a watcher failure
+mean the backend is still offline; inspect its startup error first.
+
+The backend watcher explicitly excludes `../node_modules/**`: npm runs it from
+`backend/`, but hoisted dependencies live above that directory. With tsx 4.23.15,
+the default ignore and `**/node_modules/**` alone miss some loaded parent-relative
+paths. Normal imported TypeScript edits still restart the backend. See the
+[Issue #47 investigation](docs/dev-startup-investigation.md) for reproductions.
+
+**Stop development before installing/updating dependencies in that installation.**
+`npm ci` replaces `node_modules`, including the running tsx executable's support
+files; an exclusion cannot make that safe. For parallel Codex tasks, give each
+worktree its own `npm ci` installation and separate server ports. Do not share or
+symlink `node_modules`, or install concurrently in the same directory. If runtime
+files such as `tsx/dist/preflight.cjs` are missing, first stop the affected dev
+server, select the pinned runtime and repair the installation with `npm ci`.
+Do not delete the lockfile or reset PostgreSQL data as a troubleshooting step.
+
+After a failed startup, fix the reported cause and restart development (or press
+Return in a standalone `npm run dev -w backend` watcher). Exhausting database
+retries does not cause an automatic retry loop. React Fast Refresh boundary
+warnings are separate from backend availability.
 
 ## Quality checks
 
@@ -142,11 +178,18 @@ Authorization: Bearer <RESTCOUNTRIES_API_KEY>
 ```
 
 `backend/src/import-capitals.ts` is independent of the server bootstrap. Startup
-first checks PostgreSQL readiness (up to 10 attempts, 1 second between failures;
-connections time out after 2 seconds and queries after 5 seconds), then imports,
+first checks PostgreSQL readiness (up to 30 attempts for known transient failures,
+1 second between failures; connections time out after 2 seconds and queries after
+5 seconds), then imports,
 then listens on port 3001. A missing key, unavailable DB, failed import or missing
 schema aborts startup with a visible error and nonzero exit status. The root
 `.env` is loaded before creating the pool; the API key remains server-side.
+Authentication errors, a missing database, an unknown host and unrecognized
+configuration errors fail on the first attempt. Readiness errors provide fixed,
+sanitized hints without printing the connection URI or raw database error.
+The retry budget is finite, not a fixed 30-second deadline: connection/query
+duration adds to the 29 one-second gaps. A refused local connection normally
+exhausts the budget in about 29 seconds.
 
 The importer requests `limit=100` and advances `offset` by the returned count.
 It maps `data.objects`: `names.common` → country, `capitals[0].name` → name and
