@@ -100,6 +100,13 @@ button:disabled { opacity: 0.65; cursor: wait; }
 .form-field input:focus-visible, .capital-dialog [tabindex="-1"]:focus { outline: 3px solid #bc5e12; outline-offset: 2px; }
 .field-error { color: #a01d14; overflow-wrap: anywhere; }
 .dialog-actions { justify-content: flex-end; margin-top: 1rem; }
+.pick-on-map { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; }
+.pick-on-map svg { width: 1.2rem; height: 1.2rem; stroke: currentColor; stroke-width: 1.8; }
+.coordinate-help { margin-top: 0.4rem; color: #426079; font-size: 0.85rem; }
+.coordinate-pick-banner { position: absolute; z-index: 3; top: 4rem; left: 0.75rem; right: 0.75rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; max-width: 34rem; padding: 0.75rem; border: 1px solid #83b9c1; border-radius: 0.5rem; background: #ecf8f9; color: #12334b; box-shadow: 0 3px 12px #12334b26; }
+.coordinate-pick-banner > div { flex: 1 1 12rem; min-width: 0; }
+.coordinate-pick-banner p { font-size: 0.85rem; }
+.coordinate-preview { width: 22px; height: 22px; border: 5px solid #fff; border-radius: 50%; background: #007e9e; box-shadow: 0 2px 8px #12334b99, 0 0 0 2px #007e9e; pointer-events: none; }
 .map-panel { min-width: 0; min-height: 0; position: relative; background: #e6edf0; }
 .map { width: 100%; height: 100%; }
 .map-unavailable { display: grid; align-content: center; padding: 2rem; color: #526774; text-align: center; }

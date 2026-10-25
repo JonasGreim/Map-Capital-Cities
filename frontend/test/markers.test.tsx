@@ -8,6 +8,26 @@ import { markerColorStorageKey, clearMarkerColors } from "../src/marker-color-st
 const berlin = { id: 1, name: "Berlin", country: "Germany", latitude: 52.52, longitude: 13.405 };
 const paris = { id: 2, name: "Paris", country: "France", latitude: 48.85, longitude: 2.35 };
 
+test("pick mode closes popups without clearing selection and suppresses marker/list activation and flights", t => {
+  const { controller, markers, popups, selections, flights } = setup(t);
+  controller.update([berlin, paris]);
+  controller.select(berlin.id);
+  controller.setPicking(true);
+  assert.equal(popups[0].removed, true);
+  markers[1].options.element.click();
+  controller.select(paris.id, true);
+  controller.resize();
+  assert.equal(popups.length, 1);
+  assert.deepEqual(selections, []);
+  assert.deepEqual(flights, []);
+  controller.setPicking(false);
+  controller.select(berlin.id);
+  assert.equal(popups.length, 2);
+  assert.equal(markers.length, 2);
+  markers[1].options.element.click();
+  assert.deepEqual(selections, [paris.id]);
+});
+
 // Minimal DOM/Mapbox doubles for controller logic. Actual CSS, native keyboard
 // activation and React integration are checked separately in Chromium.
 class Element extends EventTarget {

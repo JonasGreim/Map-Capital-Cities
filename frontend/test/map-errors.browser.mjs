@@ -67,6 +67,9 @@ export async function verifyMapErrors(page, baseURL, mode = "success") {
     await page.getByRole("button", { name: "Actions for Prague", exact: true }).click();
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     await page.getByRole("dialog", { name: "Edit capital", exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "Pick on map", exact: true }).isDisabled(), true);
+    await page.getByLabel("Latitude", { exact: true }).fill("0");
+    assert.equal(await page.getByLabel("Latitude", { exact: true }).inputValue(), "0");
     await page.keyboard.press("Escape");
   } else {
     await page.waitForFunction(() => !!window.mapErrorTestMap);
@@ -76,6 +79,9 @@ export async function verifyMapErrors(page, baseURL, mode = "success") {
     if (mode === "initial-style-error") {
       await page.getByText(resources, { exact: true }).waitFor();
       assert.equal(await page.getByText(unavailable, { exact: true }).count(), 0);
+      await page.getByRole("button", { name: "Add capital", exact: true }).click();
+      assert.equal(await page.getByRole("button", { name: "Pick on map", exact: true }).isDisabled(), true);
+      await page.keyboard.press("Escape");
     } else {
       await page.waitForFunction(() => window.mapErrorTestMap.loaded());
       assert.equal(await warning.count(), 0);

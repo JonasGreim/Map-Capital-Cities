@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Capital, CapitalInput } from "./api";
 import { CapitalDialog } from "./CapitalDialog";
+import type { PickRequest } from "./CapitalActions";
 
 export type CapitalFields = Record<keyof CapitalInput, string>;
 type FieldErrors = Partial<CapitalFields>;
@@ -20,16 +21,18 @@ export function validateCapital(fields: CapitalFields): { errors: FieldErrors; i
   return { errors, input: { name: fields.name.trim(), country: fields.country.trim(), latitude: Number(fields.latitude), longitude: Number(fields.longitude) } };
 }
 
-export function CapitalForm({ capital, onSave, onCancel }: {
+export function CapitalForm({ capital, onSave, onCancel, picker }: {
   capital?: Capital;
   onSave: (input: CapitalInput, id?: number) => Promise<void>;
   onCancel: () => void;
+  picker?: { available: boolean; active: boolean; disabled?: boolean; start: (request: PickRequest) => void; clearPreview: () => void };
 }) {
   const [fields, setFields] = useState<CapitalFields>({ name: capital?.name ?? "", country: capital?.country ?? "",
     latitude: capital ? String(capital.latitude) : "", longitude: capital ? String(capital.longitude) : "" });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [resumeFocus, setResumeFocus] = useState<string>();
   const pending = useRef(false);
   const form = useRef<HTMLFormElement>(null);
   const apiError = useRef<HTMLParagraphElement>(null);
@@ -54,7 +57,8 @@ export function CapitalForm({ capital, onSave, onCancel }: {
   }
 
   return (
-    <CapitalDialog title={capital ? "Edit capital" : "Add capital"} busy={busy} onClose={onCancel}>
+    <CapitalDialog title={capital ? "Edit capital" : "Add capital"} busy={busy} onClose={onCancel}
+      suspended={picker?.active} resumeFocus={resumeFocus}>
       <form ref={form} onSubmit={(event) => { void submit(event); }} noValidate>
         <fieldset disabled={busy}>
           {([ ["name", "Capital name"], ["country", "Country name"], ["latitude", "Latitude"], ["longitude", "Longitude"] ] as const).map(([field, label]) => (
@@ -64,11 +68,30 @@ export function CapitalForm({ capital, onSave, onCancel }: {
                 step={field === "latitude" || field === "longitude" ? "any" : undefined}
                 min={field === "latitude" ? -90 : field === "longitude" ? -180 : undefined}
                 max={field === "latitude" ? 90 : field === "longitude" ? 180 : undefined}
-                value={fields[field]} onChange={(event) => setFields({ ...fields, [field]: event.target.value })}
+                value={fields[field]} onChange={(event) => {
+                  setFields({ ...fields, [field]: event.target.value });
+                  if (field === "latitude" || field === "longitude") picker?.clearPreview();
+                }}
                 aria-invalid={!!errors[field]} aria-describedby={errors[field] ? `${field}-error` : undefined} />
               {errors[field] && <p className="field-error" id={`${field}-error`}>{errors[field]}</p>}
             </div>
           ))}
+          {picker && <div className="coordinate-picker-control">
+            <button id="pick-on-map" type="button" className="secondary pick-on-map" disabled={!picker.available || busy || picker.disabled}
+              aria-describedby={!picker.available ? "pick-unavailable" : undefined}
+              onClick={() => picker.start({
+                onPick: coordinates => {
+                  setFields(current => ({ ...current, ...coordinates }));
+                  setErrors(current => ({ ...current, latitude: undefined, longitude: undefined }));
+                  setResumeFocus('[name="latitude"]');
+                },
+                onCancel: () => setResumeFocus("#pick-on-map"),
+              })}>
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+              Pick on map
+            </button>
+            {!picker.available && <p id="pick-unavailable" className="coordinate-help">Map picking is unavailable. Enter coordinates manually.</p>}
+          </div>}
         </fieldset>
         {error && <p ref={apiError} className="field-error" role="alert" tabIndex={-1}>{error}</p>}
         <div className="dialog-actions">

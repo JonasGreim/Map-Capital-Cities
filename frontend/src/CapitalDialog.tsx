@@ -1,16 +1,17 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
-export function CapitalDialog({ title, busy, onClose, children }: {
+export function CapitalDialog({ title, busy, onClose, children, suspended = false, resumeFocus }: {
   title: string;
   busy: boolean;
   onClose: () => void;
   children: ReactNode;
+  suspended?: boolean;
+  resumeFocus?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const element = dialog.current!;
     const previous = document.activeElement;
-    element.showModal();
     return () => {
       element.close();
       // Reconcile the confirmed mutation first: a popup trigger may disappear
@@ -25,6 +26,18 @@ export function CapitalDialog({ title, busy, onClose, children }: {
       });
     };
   }, []);
+  useEffect(() => {
+    const element = dialog.current!;
+    // Closing removes the native modal/inert layer; keep the form mounted.
+    if (suspended) element.close();
+    else {
+      if (!element.open) element.showModal();
+      if (resumeFocus) {
+        const target = element.querySelector<HTMLElement>(resumeFocus);
+        (target?.matches(":disabled") ? element.querySelector<HTMLInputElement>('[name="latitude"]') : target)?.focus({ preventScroll: true });
+      }
+    }
+  }, [suspended, resumeFocus]);
 
   return (
     <dialog ref={dialog} className="capital-dialog" aria-labelledby="dialog-title" aria-busy={busy}
