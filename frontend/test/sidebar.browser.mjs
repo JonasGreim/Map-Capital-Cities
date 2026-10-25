@@ -52,8 +52,8 @@ export async function verifySidebar(page, baseURL) {
   await button("Actions for Berlin").waitFor();
   await page.locator(".mapboxgl-canvas").waitFor();
   await page.locator(".mapboxgl-canvas").evaluate(el => { el.dataset.sidebarTest = "original"; });
-  for (const width of [1440, 390, 320]) {
-    await page.setViewportSize({ width, height: 900 });
+  for (const [width, height] of [[1440, 900], [390, 844], [320, 568]]) {
+    await page.setViewportSize({ width, height });
     await search.fill("  gErMaNy  ");
     assert.equal(await page.locator(".capital-list li").count(), 1);
     assert.equal(await page.locator("#search-results-count").textContent(), "1 of 23 capitals");
@@ -75,7 +75,8 @@ export async function verifySidebar(page, baseURL) {
     assert.equal(await page.evaluate(() => !!document.activeElement.closest("#capital-sidebar")), false);
     await button("Expand sidebar").click();
     assert.equal(await search.inputValue(), "no such place");
-    await search.fill("");
+    await button("Clear search").click();
+    await focused(search);
     await button("Actions for Berlin").focus();
     await page.keyboard.press("Enter");
     await focused(button("Edit"));

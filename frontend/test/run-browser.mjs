@@ -6,6 +6,7 @@ import { verifyMapSelection } from "./map-selection.browser.mjs";
 import { verifySidebar } from "./sidebar.browser.mjs";
 import { verifyContinents } from "./continents.browser.mjs";
 import { verifyReset } from "./reset.browser.mjs";
+import { verifySidebarPolish } from "./sidebar-polish.browser.mjs";
 
 // Reuse externally supplied Playwright tooling; no extra project dependency.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
@@ -22,10 +23,10 @@ try {
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
     args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
   });
-  for (const [name, verify] of [["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents]]) {
+  for (const [name, verify] of [["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents], ["sidebar-polish", verifySidebarPolish]]) {
     const context = await browser.newContext();
     try {
-      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188")));
+      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", name === "sidebar-polish" ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
     } finally { await context.close(); }
   }
 } finally {
