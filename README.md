@@ -77,7 +77,7 @@ required for the static checks above.
 ## Data
 
 ```json
-{ "id": 1, "name": "string", "latitude": 0.0, "longitude": 0.0, "country": "string" }
+{ "id": 1, "name": "string", "latitude": 0.0, "longitude": 0.0, "country": "string", "flagCode": null }
 ```
 
 `db/schema.sql` creates `capitals` with an automatically generated integer ID,
@@ -180,6 +180,16 @@ is implemented.
 
 All capital objects have the shape shown in the Data section. The API uses JSON;
 POST and PUT require `Content-Type: application/json`.
+
+`flagCode` is read-only response metadata (`"DE"`, `"CZ"`, or `null`), derived from
+`names.common` and validated `codes.alpha_2` in **all pages** of the v5 startup
+import, including countries without valid capitals. The lookup stays in memory
+and is published only after a successful import transaction; no DB migration is
+needed. Names match after trimming and lowercasing, without aliases or fuzzy
+matching. Conflicting or invalid metadata and unknown names resolve to `null`.
+GET list/name and successful POST/PUT derive the code from the record's current
+country, including existing and manually created rows. POST/PUT still accept
+**only** `name`, `country`, `latitude`, and `longitude`; sending `flagCode` is rejected.
 
 | Method | Path | Success response |
 | --- | --- | --- |
@@ -379,7 +389,17 @@ Markers can overlap at world zoom levels; zoom in to distinguish nearby capitals
 or select a capital from the list or keyboard. No clustering or positional offsets
 are applied. Mapbox's globe projection can hide capitals on the far side; drag the
 map or select a list row to reach them. Map tiles require a working Mapbox token
-and network. Flags, city photos and Reset to default remain outside this phase.
+and network. City photos and Reset to default remain outside this phase.
+
+The list and selected popup show decorative 40 × 30px country flags from the
+[official flag CDN](https://restcountries.com/flags), using only validated alpha-2
+codes in `https://flags.restcountries.com/v5/svg/{lowercase-code}.svg`. Missing,
+invalid, ambiguous or unknown metadata and failed images show a neutral globe
+in the same fixed space. The globe also remains visible while an image loads;
+only a successfully loaded image replaces it, including cache hits and country
+changes. The browser makes no additional country API request;
+country edits replace the flag after a successful save. Metadata refreshes only
+on backend restart, and flag images require CDN access.
 
 ### Frontend verification
 
@@ -443,6 +463,68 @@ and React root without adding a production debug API. Run it separately from
 The isolated browser MCP tools configured in `.codex/config.toml` can run these
 checks locally with the root `.env`. Browser checks remain separate from CI and
 do not introduce private API keys or Mapbox credentials into GitHub Actions.
+
+`frontend/test/flags.browser.mjs` exports `verifyFlags(page, baseURL,
+screenshotDirectory?)` for a fresh isolated Playwright Page. It mocks all capital
+CRUD, loads real German/Czech CDN images and Mapbox, and checks flags, neutral
+fallbacks, a controlled image failure, country edits, manual creation/deletion,
+popup focus/Escape, colors, fixed dimensions and overflow at 1440px, 390px and
+320px. Controlled response gates verify the globe during initial loading and a
+country change; completion checks wait for the specific image, including reuse
+of an already loaded flag. Run it with the same prerequisites as the other suites.
+
+The selection suite waits for the canvas to match its resized container and for
+drag inertia to finish before starting the next viewport scenario. Instrumented
+runs exposed flights starting with the previous canvas size (1088×805 inside a
+390×464 container); arbitrary delays and relaxed camera assertions are not used.
+
+### Browser runner and CI prerequisite
+
+`frontend/test/run-browser.mjs` starts only Vite, awaits server readiness and runs
+the existing flag, selection and sidebar suites in fresh Chromium contexts. Every
+capital read/write is mocked; no backend or database is started. It fails on missing
+Mapbox configuration or test errors and closes the browser/server on exit.
+Use existing Playwright tooling via `PLAYWRIGHT_MODULE` (an absolute module path),
+or install a pinned copy outside the project, without changing its dependencies:
+
+```bash
+# From the repository root, with the pinned Node/npm versions and npm ci complete.
+# A valid public Mapbox token must already be in the root .env or environment.
+browser_tools=$(mktemp -d)
+npm install --prefix "$browser_tools" --no-save --package-lock=false playwright@1.62.1
+node "$browser_tools/node_modules/playwright/cli.js" install --with-deps chromium
+PLAYWRIGHT_MODULE="$browser_tools/node_modules/playwright/index.mjs" \
+  node frontend/test/run-browser.mjs
+```
+
+The required CI check remains secret-free. Full browser CI is **not enabled**:
+these existing suites need real Mapbox resources and the flag suite needs CDN
+access. A suitable Actions secret could not be confirmed because the available
+CLI identity cannot list this repository's Secrets (HTTP 404); that does not
+establish whether a secret exists. No credentials were copied or configured.
+
+The smallest next step is a separate, explicitly requested browser job after an
+owner supplies `MAPBOX_PUBLIC_TEST_TOKEN`: a dedicated public `pk` token with
+`styles:read` and `fonts:read`, permitted for `http://localhost:5188`. Mapbox URL
+restrictions do not support IP addresses, so use the runner's localhost hostname.
+See [Mapbox token scopes and URL restrictions](https://docs.mapbox.com/accounts/guides/tokens/).
+Inject it only into that job through the environment:
+
+```yaml
+env:
+  VITE_MAPBOX_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TEST_TOKEN }}
+```
+
+Reuse the commands above on an Ubuntu runner with Chromium's OS dependencies,
+read-only repository permissions and a job timeout. Start with a manually triggered,
+trusted-ref workflow or an approval-protected environment; fail if its token is
+absent. [Actions secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)
+are unavailable to fork/Dependabot PRs. Do not use `pull_request_target` to execute
+untrusted PR code with a token. A Vite public token is visible in the test browser;
+never use a secret `sk` token, print credentials, or upload served bundles, HARs
+or traces containing token-bearing requests. External Mapbox/CDN availability and
+usage limits remain prerequisites. Until configured, run this same runner locally;
+the normal lint/build/unit CI remains independent of those services.
 
 ## Priorities
 

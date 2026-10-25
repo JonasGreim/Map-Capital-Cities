@@ -123,7 +123,7 @@ test("store exposes failures, clears the error on retry and replaces data on rel
 test("list renders country and capital names using semantic list items", () => {
   const html = renderToStaticMarkup(<CapitalList capitals={[berlin]} loading={false} error={null} onRetry={async () => {}} />);
   assert.match(html, /<h2[^>]*>Countries &amp; capitals<\/h2>/);
-  assert.match(html, /<ul[^>]*><li[^>]*><button[^>]*><span[^>]*>Berlin<\/span><span[^>]*>Germany<\/span>/);
+  assert.match(html, /<ul[^>]*><li[^>]*><button[^>]*>.*class="capital-name">Berlin<\/span><span class="country">Germany<\/span>/);
   assert.match(html, /aria-label="Actions for Berlin" aria-expanded="false"/);
   assert.doesNotMatch(html, />Edit<|>Delete</);
   assert.match(html, /aria-label="1 capital"/);

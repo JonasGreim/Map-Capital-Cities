@@ -1,5 +1,6 @@
 import mapboxgl from "mapbox-gl";
 import type { Capital } from "./api";
+import { updateCountryFlag } from "./country-flag";
 
 export const markerColors = [
   { name: "Teal", value: "#216278" },
@@ -16,6 +17,7 @@ type Entry = {
   popup?: mapboxgl.Popup;
   heading?: HTMLHeadingElement;
   country?: HTMLParagraphElement;
+  flag?: HTMLSpanElement;
   coordinates?: HTMLParagraphElement;
   focusColor?: () => void;
   content?: HTMLDivElement;
@@ -66,6 +68,8 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
     const country = document.createElement("p");
     country.className = "popup-country";
     country.textContent = entry.capital.country;
+    const flag = document.createElement("span");
+    updateCountryFlag(flag, entry.capital.flagCode);
     const location = document.createElement("p");
     location.className = "popup-coordinates";
     location.setAttribute("aria-label", `Latitude ${entry.capital.latitude}, longitude ${entry.capital.longitude}`);
@@ -103,7 +107,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
       return button;
     });
     colors.append(label, swatches);
-    content.append(heading, country, location, colors);
+    content.append(heading, country, location, colors, flag);
     const popup = new api.Popup({ offset: 24, anchor: "bottom", maxWidth: "248px", focusAfterOpen: false })
       .setLngLat([entry.capital.longitude, entry.capital.latitude])
       .setDOMContent(content);
@@ -125,6 +129,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
       entry.popup = undefined;
       entry.heading = undefined;
       entry.country = undefined;
+      entry.flag = undefined;
       entry.coordinates = undefined;
       entry.focusColor = undefined;
       entry.content = undefined;
@@ -141,6 +146,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
     entry.popup = popup;
     entry.heading = heading;
     entry.country = country;
+    entry.flag = flag;
     entry.coordinates = location;
     entry.content = content;
     entry.disposePopup = (restoreFocus = true, notifySelection = true) => { returnFocus = restoreFocus; notify = notifySelection; popup.remove(); };
@@ -218,6 +224,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
           entry = created;
         }
         const moved = entry.capital.latitude !== capital.latitude || entry.capital.longitude !== capital.longitude;
+        if (entry.flag && entry.capital.flagCode !== capital.flagCode) updateCountryFlag(entry.flag, capital.flagCode);
         entry.capital = capital;
         entry.button.setAttribute("aria-label", `${capital.name}, ${capital.country}: change marker color`);
         entry.marker.setLngLat([capital.longitude, capital.latitude]);

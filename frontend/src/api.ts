@@ -1,12 +1,18 @@
-export type Capital = {
-  id: number;
+import { flagUrl } from "./country-flag";
+
+export type CapitalInput = {
   name: string;
   country: string;
   latitude: number;
   longitude: number;
 };
 
-export type CapitalInput = Omit<Capital, "id">;
+export type Capital = CapitalInput & { id: number; flagCode?: string | null };
+
+function readMetadata(capital: Capital): Capital {
+  if (capital.flagCode === undefined) return capital;
+  return { ...capital, flagCode: flagUrl(capital.flagCode) ? capital.flagCode!.toUpperCase() : null };
+}
 
 function isCapital(value: unknown): value is Capital {
   if (typeof value !== "object" || value === null) return false;
@@ -44,7 +50,7 @@ export async function getCapitals(): Promise<Capital[]> {
   if (!Array.isArray(data) || !data.every(isCapital)) {
     throw new Error("The capital API returned an invalid response. Please try again.");
   }
-  return data;
+  return data.map(readMetadata);
 }
 
 async function mutateCapital(method: "POST" | "PUT" | "DELETE", id?: number, input?: CapitalInput): Promise<Capital | void> {
@@ -55,7 +61,7 @@ async function mutateCapital(method: "POST" | "PUT" | "DELETE", id?: number, inp
     response = await fetch(id === undefined ? "/capital" : `/capital/${id}`, {
       method,
       headers: { Accept: "application/json", ...(input ? { "Content-Type": "application/json" } : {}) },
-      ...(input ? { body: JSON.stringify(input) } : {}),
+      ...(input ? { body: JSON.stringify({ name: input.name, country: input.country, latitude: input.latitude, longitude: input.longitude }) } : {}),
       signal,
     });
   } catch {
@@ -77,7 +83,7 @@ async function mutateCapital(method: "POST" | "PUT" | "DELETE", id?: number, inp
   if (method === "DELETE" || !isCapital(data) || (id !== undefined && data.id !== id)) {
     throw new Error(`The capital API returned an invalid response. ${uncertain}`);
   }
-  return data;
+  return readMetadata(data);
 }
 
 export async function createCapital(input: CapitalInput): Promise<Capital> {
