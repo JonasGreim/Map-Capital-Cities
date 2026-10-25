@@ -394,7 +394,7 @@ the reviewed `default-v1` source dataset in `db/default-capitals.json`:
 - Recreate deleted default capitals and delete all manually added capitals.
 - Generate new database IDs without restarting the identity sequence; clear the
   selection and popup. Gaps after a failed transaction are harmless.
-- Reset all marker colors in the current session to **Teal #216278**. Keep the
+- Reset all marker colors to **Teal #216278** and remove saved browser colors. Keep the
   Mapbox instance, canvas, current camera, search and sidebar state; markers
   themselves are replaced because their IDs change. Markers remain 32×32 px.
 
@@ -486,12 +486,23 @@ Escape or the close button closes the popup, clears selection and returns keyboa
 focus to its marker; clicking the map also closes it. Focus moved elsewhere is
 respected. Long popup content scrolls within the available map height.
 
-Colors are in-memory frontend state keyed by capital ID. They survive popup
-reopening, list filtering, sidebar toggles, React rerenders, capital edits and
-reloads while the map is mounted. Edited popup text/coordinates update immediately;
-a selected coordinate edit moves the camera to the new location. Removed capitals
-release their markers, colors and selection; new capitals start Teal. A page reload
-or map unmount resets colors. Nothing is saved to PostgreSQL or localStorage.
+Marker colors survive page reloads in the same browser via native `localStorage`
+(`map-capital-cities.marker-colors.v1`, a JSON object of capital ID → color).
+Only non-Teal overrides from the four-color palette are stored. Colors are never
+sent to the server and do not follow you to other browsers or devices. Edits keep
+colors by ID; confirmed deletes and creates remove stale overrides for that ID.
+**Reset to default** clears saved colors after confirmed success, so reloads stay
+Teal. Failed or uncertain writes/reset responses retain the current colors.
+If browser storage is unavailable, blocked, full or damaged, the app remains usable
+with in-memory colors; persistence across reloads cannot be guaranteed. A blocked
+storage removal can also leave an old override on disk. Changes in other tabs or
+external ID reuse are not synchronized; the app can clean up only known changes.
+
+Markers retain their current colors and instances across popup reopening, search,
+continent filtering, sidebar toggles, rerenders and data reads. Edited popup
+text/coordinates update immediately; a selected coordinate edit moves the camera
+to the new location. Removed capitals release their markers and selection; new
+capitals start Teal.
 The map stays mounted during these interactions. Markers, popups, event listeners
 and the resize observer are cleaned up on unmount. Map initialization/load failures
 show readable feedback while independent list CRUD remains available.
@@ -644,8 +655,13 @@ existing directory outside the repository to capture this suite's screenshots.
 
 ### Browser runner and CI prerequisite
 
+`frontend/test/marker-colors.browser.mjs` covers reload persistence, swatches,
+filter/search/read stability, CRUD ID cleanup, confirmed/failed reset and blocked
+storage at 1440×900, 390×844 and 320×568 with every capital request mocked.
+
 `frontend/test/run-browser.mjs` starts only Vite, awaits server readiness and runs
-the flag, selection, sidebar, reset, continent, sidebar-polish and popup-actions suites in fresh Chromium
+the marker-color, branding, flag, selection, sidebar, reset, continent, sidebar-polish
+and popup-actions suites in fresh Chromium
 contexts. Every capital read/write is mocked; no backend or database is started.
 The popup-actions suite covers expanded/collapsed sidebars at all three viewports,
 keyboard and touch, long names/close-button geometry, shared edit/delete dialogs,

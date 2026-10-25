@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createCapital, updateCapital, deleteCapital, getCapitals, resetCapitals, type Capital, type CapitalInput } from "./api";
 import { matchesContinent, type ContinentFilter } from "./continent-filter";
+import { removeMarkerColor, clearMarkerColors } from "./marker-color-storage";
 
 type CapitalState = {
   capitals: Capital[];
@@ -57,13 +58,22 @@ export const useCapitalStore = create<CapitalState>((set, get) => {
       if (id !== null && !get().capitals.some((capital) => capital.id === id && matchesContinent(capital, get().continent))) return;
       set((state) => ({ selectedCapitalId: id, selectionSource: source, selectionVersion: state.selectionVersion + 1 }));
     },
-    saveCapital: (input, id) => mutate(() => id === undefined ? createCapital(input) : updateCapital(id, input)),
-    removeCapital: (id) => mutate(() => deleteCapital(id), id),
+    saveCapital: (input, id) => mutate(async () => {
+      const saved = await (id === undefined ? createCapital(input) : updateCapital(id, input));
+      // A confirmed create owns a new record, even if an old ID was reused.
+      if (id === undefined) removeMarkerColor(saved.id);
+      return saved;
+    }),
+    removeCapital: (id) => mutate(async () => {
+      await deleteCapital(id);
+      removeMarkerColor(id);
+    }, id),
     resetCapitals: async () => {
       if (get().loading || get().mutating) throw new Error("Please wait for the current request to finish.");
       set({ mutating: true });
       try {
         const capitals = await resetCapitals();
+        clearMarkerColors();
         set((state) => ({ capitals, error: null, selectedCapitalId: null, resetVersion: state.resetVersion + 1 }));
       } finally { set({ mutating: false }); }
     },
