@@ -1,5 +1,5 @@
 import mapboxgl from "mapbox-gl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useCapitalStore } from "./capital-store";
 import { createCapitalMarkers } from "./capital-markers";
 import { useCapitalActions } from "./CapitalActions";
@@ -7,7 +7,10 @@ import { listenForCoordinates } from "./coordinate-picker";
 
 const token = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 
-export function Map() {
+export function Map({ active = true }: { active?: boolean }) {
+  const visible = useRef(active);
+  useLayoutEffect(() => { visible.current = active; }, [active]);
+  const appliedSelection = useRef(-1);
   const { toggleActions, closeActions, picking, preview, setMapAvailable, finishPick, cancelPick } = useCapitalActions();
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map>();
@@ -61,7 +64,10 @@ export function Map() {
       state.selectCapital(id, "map");
     }, { onOpen: toggleActions, onClose: closeActions });
     markers.current = capitalMarkers;
-    const observer = new ResizeObserver(() => { map.resize(); capitalMarkers.resize(); });
+    const observer = new ResizeObserver(() => {
+      if (!visible.current || !el.current?.clientWidth || !el.current.clientHeight) return;
+      map.resize(); capitalMarkers.resize();
+    });
     observer.observe(el.current);
     return () => {
       observer.disconnect();
@@ -86,16 +92,29 @@ export function Map() {
     markers.current?.update(capitals);
   }, [capitals, resetVersion]);
   useEffect(() => {
+    const map = mapRef.current;
     const state = useCapitalStore.getState();
-    markers.current?.select(state.selectedCapitalId, state.selectionSource === "list");
-    if (token && state.selectedCapitalId !== null && state.selectionSource === "list") {
-      el.current?.scrollIntoView({ block: "nearest", behavior: "instant" });
+    if (!active) return;
+    if (!map) {
+      if (state.selectedCapitalId !== null && state.selectionSource === "list" && appliedSelection.current !== state.selectionVersion) {
+        appliedSelection.current = state.selectionVersion;
+        document.getElementById("world-map")?.focus({ preventScroll: true });
+      }
+      return;
     }
-  }, [selectionVersion, selectedCapitalId]);
+    if (!el.current?.clientWidth || !el.current.clientHeight) return;
+    // React has committed the visible panel. Resize the existing instance before
+    // consuming a selection; hidden tabs leave the version pending.
+    map.resize();
+    if (appliedSelection.current !== state.selectionVersion) {
+      appliedSelection.current = state.selectionVersion;
+      markers.current?.select(state.selectedCapitalId, state.selectionSource === "list");
+    } else markers.current?.resize();
+  }, [active, selectionVersion, selectedCapitalId]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !picking) return;
+    if (!active || !map || !picking) return;
     // End an existing camera flight without starting another one.
     map.stop();
     markers.current?.setPicking(true);
@@ -118,9 +137,9 @@ export function Map() {
       document.removeEventListener("keydown", escape, true);
       markers.current?.setPicking(false);
       // Restore the existing selection without a list-triggered flyTo.
-      markers.current?.select(useCapitalStore.getState().selectedCapitalId);
+      if (visible.current) markers.current?.select(useCapitalStore.getState().selectedCapitalId);
     };
-  }, [picking, finishPick, cancelPick]);
+  }, [active, picking, finishPick, cancelPick]);
 
   useEffect(() => {
     const map = mapRef.current;

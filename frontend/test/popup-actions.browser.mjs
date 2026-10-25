@@ -1,5 +1,6 @@
 /* global document, window, innerWidth, innerHeight, structuredClone, Event, KeyboardEvent, URL, getComputedStyle */
 import assert from "node:assert/strict";
+import { showView, viewButton } from "./view-helpers.mjs";
 
 // Real Mapbox, native dialogs and pointer/keyboard interaction. All capital
 // requests (including reset) are intercepted; no backend or DB is started.
@@ -63,7 +64,7 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
     assert.ok(source.includes(anchor));
     await route.fulfill({ response, body: source.replace(anchor, `(window.popupRoot = ${anchor})`) });
   });
-  const button = name => page.getByRole("button", { name, exact: true });
+  const button = name => viewButton(page, name);
   const marker = id => {
     const capital = records.find(capital => capital.id === id);
     return page.getByRole("button", { name: `${capital.name}, ${capital.country}: change marker color`, exact: true, includeHidden: true });
@@ -82,6 +83,7 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
     return { capitals, selectedCapitalId, continent };
   });
   const openMarker = async (id = 1) => {
+    await showView(page, "Map");
     // Position it as an edge marker. Its actual pointer activation exercises the
     // existing popup-fit logic; actions below must never request another flight.
     await page.evaluate(id => {
@@ -89,12 +91,12 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       window.popupMap.jumpTo({ center: positions[id - 1], zoom: 3 });
       window.popupMap.panBy([window.popupMap.getContainer().clientWidth / 2 - 40, 0], { duration: 0 });
     }, id);
-    await marker(id).scrollIntoViewIfNeeded();
-    await marker(id).click();
+    await showView(page, "Map"); await marker(id).scrollIntoViewIfNeeded();
+    await showView(page, "Map"); await marker(id).click();
     await trigger().waitFor();
     await settled();
   };
-  const action = async name => { await trigger().click(); await button(name).click(); await dialog.waitFor(); };
+  const action = async name => { await showView(page, "Map"); await trigger().click(); await button(name).click(); await dialog.waitFor(); };
   const closed = async () => { await dialog.waitFor({ state: "hidden" }); };
   const facts = () => page.locator(".popup-facts dd").allTextContents();
   const popupBounds = () => page.evaluate(() => {
@@ -165,7 +167,7 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       assert.equal(await popupBounds(), true);
       assert.deepEqual(await popupLayout(), expectedLayout);
       if (screenshotDirectory) await page.screenshot({ path: `${screenshotDirectory}/country-facts-${width}-${collapsed ? "collapsed" : "open"}.png` });
-      await button("Purple marker").click();
+      await showView(page, "Map"); await button("Purple marker").click();
       const before = await camera();
       const startWrites = writes.length;
       for (const key of ["Enter", "Space", "Enter"]) {
@@ -183,7 +185,7 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
         assert.equal(await page.evaluate(() => window.actionListeners.size), 0);
       }
       await trigger().click();
-      await button("Gold marker").click(); // outside click keeps popup open
+      await showView(page, "Map"); await button("Gold marker").click(); // outside click keeps popup open
       assert.equal(await menu.count(), 0);
       assert.equal(await button("Gold marker").getAttribute("aria-pressed"), "true");
       await trigger().click();
@@ -289,18 +291,19 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       // The active filter can exclude a confirmed country edit. Search stays
       // untouched and the hidden marker retains its instance and chosen color.
       if (collapsed) await button("Expand sidebar").click();
-      await page.getByLabel("Continent", { exact: true }).selectOption("Europe");
-      await page.getByRole("searchbox").fill("Updated Berlin");
+      await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("Europe");
+      await showView(page, "Capitals"); await page.getByRole("searchbox", { includeHidden: true }).fill("Updated Berlin");
       if (collapsed) await button("Collapse sidebar").click();
       await settled();
       if (await trigger().count() === 0) await openMarker();
+      await showView(page, "Map"); await settled();
       const beforeCountry = await camera();
       await action("Edit");
       await page.getByLabel("Country name", { exact: true }).fill("Japan");
       await page.getByLabel("Capital name", { exact: true }).fill("Tokyo copy");
       await button("Save changes").click();
       await closed();
-      await focus(collapsed ? page.locator(".mapboxgl-canvas") : button("Add capital"));
+      await focus(collapsed || width <= 700 ? page.locator(".mapboxgl-canvas") : button("Add capital"));
       assert.equal(await page.locator(".mapboxgl-popup").count(), 0);
       assert.equal(await marker(1).isVisible(), false);
       assert.equal((await state()).selectedCapitalId, null);
@@ -308,8 +311,8 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       assert.deepEqual((await state()).capitals.find(row => row.id === 1).continents, ["Asia"]);
       assert.deepEqual(await camera(), beforeCountry);
       if (collapsed) await button("Expand sidebar").click();
-      assert.equal(await page.getByRole("searchbox").inputValue(), "Updated Berlin");
-      await page.getByLabel("Continent", { exact: true }).selectOption("");
+      assert.equal(await page.getByRole("searchbox", { includeHidden: true }).inputValue(), "Updated Berlin");
+      await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("");
       assert.equal(await page.locator(".capital-list li").count(), 0, "text search must remain unchanged after rename");
       await button("Clear search").click();
       assert.equal(await page.locator(".capital-name").filter({ hasText: "Tokyo copy" }).count(), 1);
@@ -349,7 +352,7 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       hold = false;
       release();
       await closed();
-      await focus(collapsed ? page.locator(".mapboxgl-canvas") : button("Add capital"));
+      await focus(collapsed || width <= 700 ? page.locator(".mapboxgl-canvas") : button("Add capital"));
       assert.equal(writes.length, deleteCount + 1);
       assert.equal(await page.locator('.capital-marker[aria-label^="Tokyo copy,"]').count(), 0);
       assert.equal(await page.locator(".mapboxgl-popup").count(), 0);
@@ -361,8 +364,8 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       // Long content at the map edge, default close control, touch activation,
       // switching markers and unmount all dispose the single active menu.
       if (collapsed) await button("Expand sidebar").click();
-      await page.getByRole("searchbox").fill("");
-      await button("Reset to default").click();
+      await showView(page, "Capitals"); await page.getByRole("searchbox", { includeHidden: true }).fill("");
+      await showView(page, "Capitals"); await button("Reset to default").click();
       await button("Reset capitals").click();
       await closed();
       if (collapsed) await button("Collapse sidebar").click();
@@ -373,8 +376,8 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       assert.equal(await page.locator(".popup-facts dd").last().evaluate(el => el.getBoundingClientRect().height > 36), true);
       // Even when long text needs internal scrolling, every swatch and the
       // header action can be reached without horizontal overflow.
-      await button("Gold marker").scrollIntoViewIfNeeded();
-      await button("Gold marker").click();
+      await showView(page, "Map"); await button("Gold marker").scrollIntoViewIfNeeded();
+      await showView(page, "Map"); await button("Gold marker").click();
       await trigger().scrollIntoViewIfNeeded();
       await trigger().click();
       assert.equal(await page.evaluate(() => {
@@ -419,7 +422,7 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       assert.equal(await dialog.count(), 1);
       await button("Cancel").click();
       await closed();
-      await focus(collapsed ? page.locator(".mapboxgl-canvas") : button("Add capital"));
+      await focus(collapsed || width <= 700 ? page.locator(".mapboxgl-canvas") : button("Add capital"));
       await openMarker(2);
       await trigger().click();
       await page.evaluate(() => window.popupRoot.unmount());

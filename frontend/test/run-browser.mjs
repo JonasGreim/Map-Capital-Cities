@@ -1,4 +1,4 @@
-/* global process, console */
+/* global process, console, document */
 import { URL, fileURLToPath } from "node:url";
 import { createServer } from "vite";
 import { verifyMarkerColors } from "./marker-colors.browser.mjs";
@@ -12,6 +12,7 @@ import { verifyBranding } from "./branding.browser.mjs";
 import { verifyPopupActions } from "./popup-actions.browser.mjs";
 import { verifyCoordinatePicker } from "./coordinate-picker.browser.mjs";
 import { verifyMapErrors } from "./map-errors.browser.mjs";
+import { verifyMobileNavigation } from "./mobile-navigation.browser.mjs";
 import { verifyToast } from "./toast.browser.mjs";
 
 // Reuse externally supplied Playwright tooling; no extra project dependency.
@@ -21,6 +22,7 @@ const server = await createServer({
   server: { host: "localhost", port: 5188, strictPort: true },
 });
 let browser;
+const failures = [];
 try {
   if (!server.config.env.VITE_MAPBOX_TOKEN) throw new Error("Browser regressions require VITE_MAPBOX_TOKEN in the environment or root .env");
   await server.listen();
@@ -29,13 +31,23 @@ try {
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
     args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
   });
-  for (const [name, verify] of [["toast", verifyToast], ["coordinate-picker", verifyCoordinatePicker], ["marker-colors", verifyMarkerColors], ["branding", verifyBranding], ["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents], ["sidebar-polish", verifySidebarPolish], ["popup-actions", verifyPopupActions],
+  for (const [name, verify] of [["mobile-navigation", verifyMobileNavigation], ["toast", verifyToast], ["coordinate-picker", verifyCoordinatePicker], ["marker-colors", verifyMarkerColors], ["branding", verifyBranding], ["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents], ["sidebar-polish", verifySidebarPolish], ["popup-actions", verifyPopupActions],
     ...["success", "construction-error", "initial-style-error"].map(mode => [`map-errors-${mode}`, (page, url) => verifyMapErrors(page, url, mode)])]) {
+    if (process.env.BROWSER_SUITES && !process.env.BROWSER_SUITES.split(",").includes(name)) continue;
     const context = await browser.newContext({ hasTouch: name === "popup-actions" });
     try {
-      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", ["toast", "coordinate-picker", "marker-colors", "sidebar-polish", "popup-actions"].includes(name) ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
+      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", ["mobile-navigation", "toast", "coordinate-picker", "marker-colors", "sidebar-polish", "popup-actions"].includes(name) ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
+    } catch (error) {
+      if (process.env.BROWSER_SCREENSHOT_DIR) {
+        const page = context.pages()[0];
+        await page?.screenshot({ path: `${process.env.BROWSER_SCREENSHOT_DIR}/failure-${name}.png` });
+        console.log("failure state", await page?.evaluate(() => ({focus: document.activeElement?.outerHTML.slice(0,200), dialog: document.querySelector("dialog")?.open, hidden: document.getElementById("world-map")?.hidden})));
+      }
+      console.error(name, error);
+      failures.push(error);
     } finally { await context.close(); }
   }
+  if (failures.length) throw new AggregateError(failures, "Browser suites failed");
 } finally {
   try { await browser?.close(); }
   finally { await server.close(); }

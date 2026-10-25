@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCapitalActions } from "./CapitalActions";
 import type { Capital } from "./api";
@@ -12,6 +13,8 @@ type CapitalListProps = {
   error: string | null;
   onRetry: () => Promise<void>;
   collapsed?: boolean;
+  mobile?: boolean;
+  onShowMap?: () => void;
 };
 
 export function filterCapitals(capitals: Capital[], query: string, continent: ContinentFilter = "") {
@@ -28,12 +31,13 @@ export function centerRowInList(scroller: HTMLDivElement, row: HTMLButtonElement
   scroller.scrollTop = Math.max(0, Math.min(centered, scroller.scrollHeight - scroller.clientHeight));
 }
 
-export function CapitalList({ capitals, loading, error, onRetry, collapsed = false }: CapitalListProps) {
+export function CapitalList({ capitals, loading, error, onRetry, collapsed = false, mobile = false, onShowMap }: CapitalListProps) {
   const results = useRef<HTMLDivElement>(null);
   const retryButton = useRef<HTMLButtonElement>(null);
   const retryPending = useRef(false);
   const { continent, setContinent, mutating, resetCapitals, selectedCapitalId, selectionSource, selectionVersion, selectCapital } = useCapitalStore();
   const selectedRow = useRef<HTMLButtonElement>(null);
+  const revealedSelection = useRef(-1);
   const [resetting, setResetting] = useState(false);
   const { actions, toggleActions, closeActions, createCapital, setNotice, picking } = useCapitalActions();
   const [query, setQuery] = useState("");
@@ -43,7 +47,8 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
   useEffect(() => {
     // Reveal only within the list's own scroller. Never move the page, steal
     // focus, open the sidebar or change a search on marker activation.
-    if (selectionSource !== "map" || collapsed) return;
+    if (selectionSource !== "map" || collapsed || revealedSelection.current === selectionVersion) return;
+    revealedSelection.current = selectionVersion;
     const row = selectedRow.current;
     const scroller = results.current;
     if (!row || !scroller) return;
@@ -71,7 +76,7 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
   }
 
   return (
-    <aside id="capital-sidebar" className="sidebar" hidden={collapsed} aria-labelledby="capitals-heading">
+    <aside id="capital-sidebar" className="sidebar" hidden={collapsed} role={mobile ? "tabpanel" : undefined} aria-labelledby={mobile ? "capitals-tab" : "capitals-heading"}>
       <div className="list-heading">
         <h2 id="capitals-heading">Countries &amp; capitals</h2>
         {!loading && !error && <span className="count" aria-label={`${capitals.length} ${capitals.length === 1 ? "capital" : "capitals"}`}>{capitals.length}</span>}
@@ -120,7 +125,7 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
               <li key={capital.id} data-selected={selectedCapitalId === capital.id || undefined} data-actions-open={actions?.trigger.id === `capital-actions-${capital.id}` || undefined}>
                 <button type="button" className="capital-label" disabled={picking} ref={selectedCapitalId === capital.id ? selectedRow : undefined}
                   aria-label={`Show ${capital.name}, ${capital.country} on map`} aria-pressed={selectedCapitalId === capital.id}
-                  onClick={() => { closeActions(); selectCapital(capital.id); }}>
+                  onClick={() => { closeActions(); onShowMap?.(); selectCapital(capital.id); }}>
                   <CountryFlag code={capital.flagCode} />
                   <span className="capital-context"><span className="capital-name">{capital.name}</span>
                     <span className="country">{capital.country}</span></span>
@@ -137,7 +142,7 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
           </ul>
         )}
       </div>
-      {resetting && <ResetCapitalsDialog onCancel={() => {
+      {resetting && createPortal(<ResetCapitalsDialog onCancel={() => {
         setResetting(false);
         if (error) requestAnimationFrame(() => retryButton.current?.focus());
       }} onReset={async () => {
@@ -147,7 +152,7 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
         await onRetry();
         const failure = useCapitalStore.getState().error;
         if (failure) throw new Error(failure);
-      }} />}
+      }} />, document.body)}
     </aside>
   );
 }

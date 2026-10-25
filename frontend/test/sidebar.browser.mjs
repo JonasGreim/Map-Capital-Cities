@@ -1,5 +1,6 @@
 /* global document, getComputedStyle, structuredClone, innerWidth */
 import assert from "node:assert/strict";
+import { showView, viewButton } from "./view-helpers.mjs";
 
 // Reusable with an isolated Playwright Page. All capital traffic is intercepted;
 // no backend or development database is used. No Playwright dependency is added.
@@ -37,7 +38,7 @@ export async function verifySidebar(page, baseURL) {
     records = records.filter(record => record.id !== saved.id).concat(saved);
     return route.fulfill({ status: method === "POST" ? 201 : 200, json: saved });
   });
-  const button = name => page.getByRole("button", { name, exact: true });
+  const button = name => viewButton(page, name);
   const reloadData = async () => {
     await page.getByRole("region", { name: "Capital results" }).focus();
     await page.evaluate(async () => {
@@ -49,18 +50,18 @@ export async function verifySidebar(page, baseURL) {
   const search = page.getByRole("searchbox", { name: "Search countries or capitals" });
   const evidence = [];
   await page.goto(baseURL);
-  await button("Actions for Berlin").waitFor();
+  await showView(page, "Capitals"); await button("Actions for Berlin").waitFor();
   await page.locator(".mapboxgl-canvas").waitFor();
   await page.locator(".mapboxgl-canvas").evaluate(el => { el.dataset.sidebarTest = "original"; });
   for (const [width, height] of [[1440, 900], [390, 844], [320, 568]]) {
     await page.setViewportSize({ width, height });
-    await search.fill("  gErMaNy  ");
+    await showView(page, "Capitals"); await search.fill("  gErMaNy  ");
     assert.equal(await page.locator(".capital-list li").count(), 1);
     assert.equal(await page.locator("#search-results-count").textContent(), "1 of 23 capitals");
     assert.equal(await page.locator(".capital-marker").count(), 23);
-    await search.fill("pRaGuE");
+    await showView(page, "Capitals"); await search.fill("pRaGuE");
     assert.equal(await page.locator(".capital-list li").count(), 1);
-    await search.fill("no such place");
+    await showView(page, "Capitals"); await search.fill("no such place");
     await page.getByText("No matching capitals. Try another search or continent.").waitFor();
     assert.equal(await page.locator("#search-results-count").textContent(), "0 of 23 capitals");
     await button("Collapse sidebar").click();
@@ -70,22 +71,22 @@ export async function verifySidebar(page, baseURL) {
       const canvas = document.querySelector(".mapboxgl-canvas");
       return map.clientHeight >= 320 && Math.abs(map.clientWidth - canvas.clientWidth) <= 1 && Math.abs(map.clientHeight - canvas.clientHeight) <= 1;
     });
-    await focused(button("Expand sidebar"));
+    await focused(button(width > 700 ? "Expand sidebar" : "Collapse sidebar"));
     await page.keyboard.press("Shift+Tab");
     assert.equal(await page.evaluate(() => !!document.activeElement.closest("#capital-sidebar")), false);
     await button("Expand sidebar").click();
     assert.equal(await search.inputValue(), "no such place");
     await button("Clear search").click();
     await focused(search);
-    await button("Actions for Berlin").focus();
+    await showView(page, "Capitals"); await button("Actions for Berlin").focus();
     await page.keyboard.press("Enter");
     await focused(button("Edit"));
     await page.keyboard.press("Tab");
     await focused(button("Delete"));
     await page.keyboard.press("Escape");
     await focused(button("Actions for Berlin"));
-    await button("Actions for Berlin").click();
-    await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
     assert.equal(await button("Edit").count(), 0);
     await page.keyboard.press("Space");
     await page.keyboard.press("Shift+Tab");
@@ -94,19 +95,19 @@ export async function verifySidebar(page, baseURL) {
     await page.keyboard.press("Tab");
     await page.keyboard.press("Tab");
     assert.equal(await button("Edit").count(), 0);
-    await button("Actions for Berlin").click();
-    await page.locator(".capital-name").filter({ hasText: /^Berlin$/ }).click({ position: { x: 4, y: 4 } });
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await page.locator(".capital-name").filter({ hasText: /^Berlin$/ }).click({ position: { x: 4, y: 4 } });
     assert.equal(await button("Edit").count(), 0);
-    await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
     await page.getByRole("heading", { name: "Countries & capitals" }).click();
     assert.equal(await button("Edit").count(), 0);
-    await button("Actions for Berlin").click();
+    await showView(page, "Capitals"); await button("Actions for Berlin").click();
     await button("Edit").click();
     await page.getByRole("dialog", { name: "Edit capital" }).waitFor();
     assert.equal(await page.getByLabel("Capital name", { exact: true }).inputValue(), "Berlin");
     await page.keyboard.press("Escape");
     await focused(button("Actions for Berlin"));
-    await button("Add capital").click();
+    await showView(page, "Capitals"); await button("Add capital").click();
     await focused(page.getByLabel("Capital name", { exact: true }));
     await page.keyboard.press("Shift+Tab");
     // Native dialogs may hand boundary focus to browser chrome; background stays inert.
@@ -115,12 +116,18 @@ export async function verifySidebar(page, baseURL) {
     await focused(page.getByLabel("Capital name", { exact: true }));
     await button("Cancel").click();
     await focused(button("Add capital"));
-    const skip = page.getByRole("link", { name: "Skip to map" });
-    assert.equal(await skip.evaluate(el => getComputedStyle(el).clipPath), "inset(50%)");
-    await skip.focus();
-    assert.equal(await skip.evaluate(el => getComputedStyle(el).clipPath), "none");
-    await page.keyboard.press("Enter");
-    await focused(page.getByRole("region", { name: "World map", exact: true }));
+    if (width > 700) {
+      const skip = page.getByRole("link", { name: "Skip to map" });
+      assert.equal(await skip.evaluate(el => getComputedStyle(el).clipPath), "inset(50%)");
+      await skip.focus();
+      assert.equal(await skip.evaluate(el => getComputedStyle(el).clipPath), "none");
+      await page.keyboard.press("Enter");
+      await focused(page.getByRole("region", { name: "World map", exact: true }));
+    } else {
+      await page.getByRole("tab", { name: "Map", exact: true }).focus();
+      await page.keyboard.press("Enter");
+      await focused(page.getByRole("tab", { name: "Map", exact: true }));
+    }
     await page.waitForFunction(() => {
       const map = document.querySelector(".map");
       const canvas = document.querySelector(".mapboxgl-canvas");
@@ -132,7 +139,7 @@ export async function verifySidebar(page, baseURL) {
     evidence.push({ width, search: true, menus: true, dialogs: true, keyboard: true, mapCanvasPreserved: true, overflow: false });
   }
   // Real browser writes use the controlled route above, including pending/error states.
-  await button("Add capital").click();
+  await showView(page, "Capitals"); await button("Add capital").click();
   await button("Create capital").click();
   await focused(page.getByLabel("Capital name", { exact: true }));
   for (const [label, value] of [["Capital name", "Test City"], ["Country name", "Test Country"], ["Latitude", "10"], ["Longitude", "20"]]) {
@@ -149,8 +156,8 @@ export async function verifySidebar(page, baseURL) {
   await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
   await focused(button("Add capital"));
   assert.equal(await page.locator(".capital-marker").count(), 24);
-  await search.fill("Test City");
-  await button("Actions for Test City").click();
+  await showView(page, "Capitals"); await search.fill("Test City");
+  await showView(page, "Capitals"); await button("Actions for Test City").click();
   await button("Edit").click();
   await page.getByLabel("Capital name", { exact: true }).fill("Renamed City");
   writeMode = "error";
@@ -161,37 +168,37 @@ export async function verifySidebar(page, baseURL) {
   await button("Save changes").click();
   await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
   await focused(button("Add capital")); // edited record no longer matches search
-  await search.fill("Renamed City");
-  await button("Actions for Renamed City").click();
+  await showView(page, "Capitals"); await search.fill("Renamed City");
+  await showView(page, "Capitals"); await button("Actions for Renamed City").click();
   await button("Delete").click();
   await button("Cancel").click();
   await focused(button("Actions for Renamed City"));
-  await button("Actions for Renamed City").click();
+  await showView(page, "Capitals"); await button("Actions for Renamed City").click();
   await button("Delete").click();
   await button("Delete capital").click();
   await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
   await focused(button("Add capital"));
   assert.deepEqual(writes, ["POST", "PUT", "PUT", "DELETE"]);
   assert.equal(await page.locator(".capital-marker").count(), 23);
-  await search.fill("");
+  await showView(page, "Capitals"); await search.fill("");
   readMode = "hold";
   await reloadData();
   await page.getByText("Loading capitals…", { exact: true }).waitFor();
   assert.equal(await button("Add capital").isDisabled(), true);
   readMode = "error";
   releaseRead();
-  await button("Try again").waitFor();
-  await button("Try again").focus();
+  await showView(page, "Capitals"); await button("Try again").waitFor();
+  await showView(page, "Capitals"); await button("Try again").focus();
   readMode = "success";
   await page.keyboard.press("Enter");
-  await button("Actions for Berlin").waitFor();
+  await showView(page, "Capitals"); await button("Actions for Berlin").waitFor();
   await focused(page.getByRole("region", { name: "Capital results" }));
   readMode = "empty";
   await reloadData();
   await page.getByText("No capitals available yet.").waitFor();
   readMode = "success";
   await reloadData();
-  await button("Actions for Berlin").waitFor();
+  await showView(page, "Capitals"); await button("Actions for Berlin").waitFor();
   assert.equal(await page.locator(".mapboxgl-canvas").getAttribute("data-sidebar-test"), "original");
   assert.deepEqual(errors, []);
   return { viewports: evidence, mockedCRUD: writes, loadingErrorRetryEmpty: true, pageErrors: errors };

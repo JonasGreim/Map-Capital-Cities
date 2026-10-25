@@ -1,5 +1,6 @@
 /* global document, window, requestAnimationFrame, innerWidth */
 import assert from "node:assert/strict";
+import { showView, viewButton } from "./view-helpers.mjs";
 
 // Real Mapbox and native dialogs. Every API read/write stays in this fixture;
 // instrumentation is applied only to Vite responses, never production code.
@@ -58,7 +59,7 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
     assert.ok(api && source.includes("const failed ="));
     await route.fulfill({ response, body: source.replace("const failed =", `(${inspectMap.toString()})(map, ${api});\nconst failed =`) });
   });
-  const button = name => page.getByRole("button", { name, exact: true });
+  const button = name => viewButton(page, name);
   const dialog = () => page.locator("dialog.capital-dialog");
   const field = name => page.getByLabel(name, { exact: true });
   const focused = async locator => {
@@ -112,7 +113,7 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
       window.originalPickerCanvas = window.pickerMap.getCanvas();
       window.originalPickerMarkers = [...window.pickerMarkers];
     });
-    await button("Add capital").click();
+    await showView(page, "Capitals"); await button("Add capital").click();
     await field("Capital name").fill("Draft city");
     await field("Country name").fill("Draft country");
     await field("Latitude").fill("12.5");
@@ -138,7 +139,8 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
     await page.locator(".capital-marker").first().dispatchEvent("click");
     assert.equal(await page.locator(".mapboxgl-popup").count(), 0);
     assert.equal(await page.locator(".coordinate-pick-banner").count(), 1);
-    await button("Collapse sidebar").click();
+    if (width > 700) await button("Collapse sidebar").click();
+    else assert.equal(await page.getByRole("tab", { name: "Capitals", exact: true }).isDisabled(), true);
     await frame();
     assert.equal(await page.locator(".coordinate-pick-banner").isVisible(), true);
     // Panning and zooming must retain pick mode, without selecting a point.
@@ -182,9 +184,9 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
       const map = window.pickerMap;
       return map.getCanvas().clientWidth === map.getContainer().clientWidth;
     });
-    await button("Show Berlin, Germany on map").click();
+    await showView(page, "Capitals"); await button("Show Berlin, Germany on map").click();
     await idle();
-    await button("Red marker").click();
+    await showView(page, "Map"); await button("Red marker").click();
     await button("Map actions for Berlin").click();
     await button("Edit").click();
     await field("Capital name").fill("Edited Berlin");
@@ -210,13 +212,14 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
     assert.equal(await button("Red marker").getAttribute("aria-pressed"), "true");
     assert.equal(await button("Show Edited Berlin, Germany on map").getAttribute("aria-pressed"), "true");
     await page.keyboard.press("Escape");
-    await button("Actions for Edited Berlin").click();
+    await showView(page, "Capitals"); await button("Actions for Edited Berlin").click();
     await button("Edit").click();
     await start();
     await pick();
     await button("Cancel").click();
     assert.equal(writes.length, 3);
     assert.equal(await page.locator(".coordinate-preview").count(), 0);
+    await showView(page, "Map");
     const geometry = await page.evaluate(() => ({
       sameCanvas: window.originalPickerCanvas === window.pickerMap.getCanvas(),
       sameMarkers: window.originalPickerMarkers.every(marker => marker.getElement().isConnected),
@@ -227,7 +230,7 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
     assert.deepEqual(geometry, { sameCanvas: true, sameMarkers: true, squareMarkers: true, overflow: false, listeners: 0 });
     evidence.push({ width, height, createEditCancelEscape: true, failedSaveDraft: true, panZoom: true, ...geometry });
     if (width === 320) {
-      await button("Actions for Edited Berlin").click();
+      await showView(page, "Capitals"); await button("Actions for Edited Berlin").click();
       await button("Edit").click();
       await start();
       records = records.filter(capital => capital.id !== 1);
@@ -244,9 +247,9 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
     }
   }
   // Context loss cancels safely into the manual form, without an inert layer.
-  await page.getByRole("searchbox").fill("Berlin");
-  await page.getByLabel("Continent", { exact: true }).selectOption("Europe");
-  await button("Add capital").click();
+  await showView(page, "Capitals"); await page.getByRole("searchbox", { includeHidden: true }).fill("Berlin");
+  await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("Europe");
+  await showView(page, "Capitals"); await button("Add capital").click();
   await field("Capital name").fill("Keep this draft");
   await field("Latitude").fill("0");
   await field("Longitude").fill("0");
@@ -257,7 +260,7 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
   assert.equal(await field("Capital name").inputValue(), "Keep this draft");
   assert.deepEqual(await value(), { latitude: "0", longitude: "0" });
   await focused(field("Latitude"));
-  assert.equal(await page.getByRole("searchbox").inputValue(), "Berlin");
+  assert.equal(await page.getByRole("searchbox", { includeHidden: true }).inputValue(), "Berlin");
   assert.equal(await page.getByLabel("Continent", { exact: true }).inputValue(), "Europe");
   await page.evaluate(() => window.pickerMap.fire("webglcontextrestored"));
   assert.equal(await button("Pick on map").isEnabled(), true);
@@ -270,7 +273,7 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
   });
   await dialog().waitFor({ state: "hidden" });
   assert.equal(await page.locator(".coordinate-preview").count(), 0);
-  await button("Add capital").click();
+  await showView(page, "Capitals"); await button("Add capital").click();
   await start();
   await page.evaluate(() => window.pickerRoot.unmount());
   await frame();
@@ -279,7 +282,7 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
   // Missing configuration still permits the complete manual create workflow.
   noToken = true;
   await page.reload();
-  await button("Add capital").click();
+  await showView(page, "Capitals"); await button("Add capital").click();
   assert.equal(await button("Pick on map").isDisabled(), true);
   assert.equal(await page.getByText("Map picking is unavailable. Enter coordinates manually.").isVisible(), true);
   assert.equal(await page.locator(".mapboxgl-canvas").count(), 0);
@@ -292,6 +295,9 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
   await dialog().waitFor({ state: "hidden" });
   assert.equal(writes.length, beforeManual + 1);
   assert.deepEqual(writes.at(-1), { method: "POST", input: { name: "Manual city", country: "Manual country", latitude: 0, longitude: -180 } });
+  await showView(page, "Capitals");
+  await button("Show Manual city, Manual country on map").click();
+  await focused(page.locator("#world-map"));
   assert.deepEqual(errors, []);
   return { viewports: evidence, externalRemovalDraft: true, contextLoss: true, reset: true, unmount: true, manualWithoutMap: true, errors };
 }

@@ -1,5 +1,6 @@
 /* global document, window, getComputedStyle, MutationObserver, innerWidth, innerHeight */
 import assert from "node:assert/strict";
+import { showView, viewButton } from "./view-helpers.mjs";
 
 // Real React/CSS; all CRUD/reset requests stay in this fixture. No map/network
 // prerequisite for the toast itself. Existing suites cover the real Mapbox flows.
@@ -41,9 +42,10 @@ export async function verifyToast(page, baseURL, screenshotDirectory) {
     assert.ok(source.includes(anchor));
     await route.fulfill({ response, body: source.replace(anchor, `${anchor}\nwindow.setToastNotice = setNotice;`) });
   });
-  const button = name => page.getByRole("button", { name, exact: true });
+  const button = name => viewButton(page, name);
   const notice = page.locator(".mutation-notice");
-  const position = async (bottom = 24) => {
+  const position = async (bottom) => {
+    bottom ??= 24 + await page.locator(".mobile-navigation").evaluate(el => el.getBoundingClientRect().height);
     const geometry = await notice.evaluate(el => {
       const r = el.getBoundingClientRect();
       return { center: r.left + r.width / 2, expectedCenter: innerWidth / 2,
@@ -112,7 +114,7 @@ export async function verifyToast(page, baseURL, screenshotDirectory) {
     records = [...defaults];
     await page.setViewportSize({ width, height });
     await page.goto(baseURL);
-    await button("Actions for Berlin").waitFor();
+    await showView(page, "Capitals"); await button("Actions for Berlin").waitFor();
     await page.evaluate(() => {
       window.toastRegion = document.querySelector(".mutation-notice");
       window.toastEntrances = 0;
@@ -135,7 +137,7 @@ export async function verifyToast(page, baseURL, screenshotDirectory) {
     for (const [reducedMotion, duration] of [["no-preference", 160], ["reduce", 80]]) {
       await page.emulateMedia({ reducedMotion });
       const before = writes.length;
-      await button("Add capital").focus();
+      await showView(page, "Capitals"); await button("Add capital").focus();
       await page.keyboard.press("Enter");
       await button("Create capital").click();
       await focused(page.getByLabel("Capital name", { exact: true }));
@@ -152,22 +154,22 @@ export async function verifyToast(page, baseURL, screenshotDirectory) {
       assert.equal(await page.locator(".capital-dialog").evaluate(el => el.getAnimations({ subtree: true }).length), 0);
       release(); hold = false;
       await entrance("Capital created.", duration, button("Add capital"));
-      await button("Actions for Berlin").click();
+      await showView(page, "Capitals"); await button("Actions for Berlin").click();
       await button("Edit").click();
       await empty();
       await button("Save changes").click();
       await entrance("Capital updated.", duration, button("Actions for Berlin"));
-      await button("Actions for Audit capital").click();
+      await showView(page, "Capitals"); await button("Actions for Audit capital").click();
       await button("Delete").click();
       await button("Delete capital").click();
       await entrance("Capital deleted.", duration, button("Add capital"));
-      await button("Reset to default").click();
+      await showView(page, "Capitals"); await button("Reset to default").click();
       await button("Reset capitals").click();
       await entrance("Default capitals restored. Marker colors reset to Teal.", duration, button("Reset to default"));
       assert.equal(writes.length, before + 4);
       await setNotice(""); await empty();
       fail = true;
-      await button("Actions for Berlin").click();
+      await showView(page, "Capitals"); await button("Actions for Berlin").click();
       await button("Edit").click();
       await button("Save changes").click();
       const alert = page.getByRole("alert");
@@ -205,7 +207,7 @@ export async function verifyToast(page, baseURL, screenshotDirectory) {
     }
     await button("Expand sidebar").click();
     // No re-entry during the running animation, after completion, or on focus/Tab.
-    await page.getByRole("searchbox").focus();
+    await showView(page, "Capitals"); await page.getByRole("searchbox", { includeHidden: true }).focus();
     const before = await layout();
     await setNotice("Capital created.");
     assert.deepEqual(await layout(), before);
@@ -215,7 +217,7 @@ export async function verifyToast(page, baseURL, screenshotDirectory) {
     assert.equal(await page.evaluate(() => window.toastEntrances), count);
     assert.equal(await notice.evaluate(el => el.getAnimations()[0] === window.toastAnimation), true);
     assert.equal(await page.evaluate(() => window.toastAnimation.currentTime), 20);
-    await focused(page.getByRole("searchbox"));
+    await focused(page.getByRole("searchbox", { includeHidden: true }));
     await page.evaluate(() => window.toastAnimation.finish());
     await setNotice("Capital deleted.");
     await page.keyboard.press("Tab");

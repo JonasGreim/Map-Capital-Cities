@@ -1,5 +1,6 @@
 /* global document, window, localStorage, sessionStorage, Storage, innerWidth, URL */
 import assert from "node:assert/strict";
+import { showView, viewButton } from "./view-helpers.mjs";
 
 // Real Chromium/Mapbox; intercept every capital request, including all writes.
 export async function verifyMarkerColors(page, baseURL, screenshotDirectory) {
@@ -60,7 +61,7 @@ export async function verifyMarkerColors(page, baseURL, screenshotDirectory) {
       Storage.prototype.removeItem = () => { throw new Error("SecurityError"); };
     }
   });
-  const button = name => page.getByRole("button", { name, exact: true });
+  const button = name => viewButton(page, name);
   const marker = id => {
     const capital = records.find(capital => capital.id === id);
     return page.getByRole("button", { name: `${capital.name}, ${capital.country}: change marker color`, exact: true, includeHidden: true });
@@ -72,7 +73,7 @@ export async function verifyMarkerColors(page, baseURL, screenshotDirectory) {
   const camera = () => page.evaluate(() => ({ center: window.colorMap.getCenter().toArray(), zoom: window.colorMap.getZoom(), flights: window.colorFlights }));
   const open = async id => {
     const capital = records.find(capital => capital.id === id);
-    await button(`Show ${capital.name}, ${capital.country} on map`).click();
+    await showView(page, "Capitals"); await button(`Show ${capital.name}, ${capital.country} on map`).click();
     await page.locator(".popup-actions-trigger").waitFor();
     await settled();
   };
@@ -113,12 +114,12 @@ export async function verifyMarkerColors(page, baseURL, screenshotDirectory) {
       window.originalColorMarkers = [...document.querySelectorAll(".capital-marker")];
     });
     const view = await camera();
-    const continent = page.getByRole("combobox", { name: "Continent" });
-    await continent.selectOption("Asia");
+    const continent = page.getByRole("combobox", { name: "Continent", includeHidden: true });
+    await showView(page, "Capitals"); await continent.selectOption("Asia");
     assert.equal(await marker(1).isHidden(), true);
-    await continent.selectOption("");
-    const search = page.getByRole("searchbox");
-    await search.fill("Tokyo");
+    await showView(page, "Capitals"); await continent.selectOption("");
+    const search = page.getByRole("searchbox", { includeHidden: true });
+    await showView(page, "Capitals"); await search.fill("Tokyo");
     assert.equal(await color(1), "rgb(180, 35, 24)");
     await button("Clear search").click();
     await page.evaluate(async () => {
@@ -154,7 +155,7 @@ export async function verifyMarkerColors(page, baseURL, screenshotDirectory) {
     await page.evaluate(key => {
       const colors = JSON.parse(localStorage.getItem(key)); colors[4] = "#946200"; localStorage.setItem(key, JSON.stringify(colors));
     }, key);
-    await button("Add capital").click();
+    await showView(page, "Capitals"); await button("Add capital").click();
     for (const [label, value] of [["Capital name", "New capital"], ["Country name", "New country"], ["Latitude", "0"], ["Longitude", "0"]]) {
       await page.getByLabel(label, { exact: true }).fill(value);
     }
@@ -166,12 +167,12 @@ export async function verifyMarkerColors(page, baseURL, screenshotDirectory) {
     await swatch("Purple"); await open(3); await swatch("Gold");
     const resetView = await camera();
     failure = true;
-    await button("Reset to default").click(); await button("Reset capitals").click();
+    await showView(page, "Capitals"); await button("Reset to default").click(); await button("Reset capitals").click();
     await page.locator("dialog.capital-dialog").getByRole("alert").waitFor();
     assert.deepEqual(await stored(), { 2: "#6941c6", 3: "#946200" });
     assert.equal(await color(3), "rgb(148, 98, 0)");
     await button("Cancel").click(); failure = false;
-    await button("Reset to default").click(); await button("Reset capitals").click(); await closeDialog();
+    await showView(page, "Capitals"); await button("Reset to default").click(); await button("Reset capitals").click(); await closeDialog();
     assert.deepEqual(await camera(), resetView);
     assert.deepEqual(await stored(), {});
     assert.equal(await page.evaluate(key => localStorage.getItem(key), key), null);
@@ -186,13 +187,13 @@ export async function verifyMarkerColors(page, baseURL, screenshotDirectory) {
       await reload();
       await open(1); await swatch("Red");
       await button("Close popup").click();
-      await continent.selectOption("Asia"); await continent.selectOption("");
+      await showView(page, "Capitals"); await continent.selectOption("Asia"); await showView(page, "Capitals"); await continent.selectOption("");
       await open(1);
       assert.equal(await button("Red marker").getAttribute("aria-pressed"), "true");
       assert.equal(await color(1), "rgb(180, 35, 24)");
       await action("Edit"); await button("Save changes").click(); await closeDialog();
       assert.equal(await color(1), "rgb(180, 35, 24)");
-      await button("Reset to default").click(); await button("Reset capitals").click(); await closeDialog();
+      await showView(page, "Capitals"); await button("Reset to default").click(); await button("Reset capitals").click(); await closeDialog();
       assert.equal(await color(1), "rgb(33, 98, 120)");
       await page.evaluate(() => delete sessionStorage["color-storage-failure"]);
       await reload();
