@@ -6,9 +6,10 @@ import assert from "node:assert/strict";
 export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
   page.setDefaultTimeout(15_000);
   const defaults = [
-    { id: 1, name: "Berlin", country: "Germany", latitude: 52.52, longitude: 13.405, flagCode: "DE", continents: ["Europe"] },
-    { id: 2, name: "Prague", country: "Czechia", latitude: 50.07, longitude: 14.43, flagCode: "CZ", continents: ["Europe"] },
-    { id: 3, name: "A very long capital name that wraps across several lines", country: "A very long country name that wraps across several lines", latitude: 0, longitude: 0, flagCode: null, continents: null },
+    { id: 1, name: "Berlin", country: "Germany", latitude: 52.52, longitude: 13.405, flagCode: "DE", continents: ["Europe"], population: 83200000, currencies: [{ code: "EUR", name: "Euro" }] },
+    { id: 2, name: "Prague", country: "Czechia", latitude: 50.07, longitude: 14.43, flagCode: "CZ", continents: ["Europe"], population: 10800000, currencies: [{ code: "CZK", name: "Czech koruna" }] },
+    { id: 3, name: "A very long capital name that wraps across several lines", country: "A very long country name that wraps across several lines", latitude: 0, longitude: 0, flagCode: null, continents: ["Asia", "Europe"], population: 0,
+      currencies: [{ code: "EUR", name: "An exceptionally long currency name that must wrap safely inside the small popup" }, { code: "USD", name: "US dollar" }, { code: "JPY" }] },
   ];
   let records;
   let failure = null;
@@ -39,9 +40,9 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
     }
     const input = request.postDataJSON();
     assert.deepEqual(Object.keys(input).sort(), ["country", "latitude", "longitude", "name"]);
-    const metadata = input.country === "Japan" ? { flagCode: "JP", continents: ["Asia"] }
-      : defaults.find(capital => capital.country === input.country) ?? { flagCode: null, continents: null };
-    const saved = { ...input, id, flagCode: metadata.flagCode, continents: metadata.continents };
+    const metadata = input.country === "Japan" ? { flagCode: "JP", continents: ["Asia"], population: 123000000, currencies: [{ code: "JPY", name: "Japanese yen" }] }
+      : defaults.find(capital => capital.country === input.country) ?? { flagCode: null, continents: null, population: null, currencies: null };
+    const saved = { ...input, id, flagCode: metadata.flagCode, continents: metadata.continents, population: metadata.population, currencies: metadata.currencies };
     records = records.map(capital => capital.id === id ? saved : capital);
     return route.fulfill({ json: saved });
   });
@@ -95,6 +96,15 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
   };
   const action = async name => { await trigger().click(); await button(name).click(); await dialog.waitFor(); };
   const closed = async () => { await dialog.waitFor({ state: "hidden" }); };
+  const facts = () => page.locator(".popup-facts dd").allTextContents();
+  const popupBounds = () => page.evaluate(() => {
+    const popup = document.querySelector(".mapboxgl-popup").getBoundingClientRect();
+    const map = window.popupMap.getContainer().getBoundingClientRect();
+    const content = document.querySelector(".capital-popup");
+    return popup.left >= map.left - 1 && popup.right <= map.right + 1
+      && popup.top >= map.top - 1 && popup.bottom <= map.bottom + 1
+      && content.scrollWidth <= content.clientWidth;
+  });
   const evidence = [];
   for (const [width, height] of [[1440, 900], [390, 844], [320, 568]]) {
     for (const collapsed of [false, true]) {
@@ -125,6 +135,12 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
         }
       });
       await openMarker();
+      assert.deepEqual(await page.locator(".popup-facts dt").allTextContents(), ["Continent", "Country population", "Currency"]);
+      assert.deepEqual(await facts(), ["Europe", "83,200,000", "Euro (EUR)"]);
+      assert.equal(await page.locator(".popup-coordinates").textContent(), "52.5200, 13.4050");
+      assert.match(await page.locator(".capital-popup .country-flag img").getAttribute("src"), /de.svg$/);
+      assert.equal(await popupBounds(), true);
+      if (screenshotDirectory) await page.screenshot({ path: `${screenshotDirectory}/country-facts-${width}-${collapsed ? "collapsed" : "open"}.png` });
       await button("Purple marker").click();
       const before = await camera();
       const startWrites = writes.length;
@@ -210,6 +226,30 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       assert.equal(await page.locator(".mutation-notice").textContent(), "Capital updated.");
       assert.deepEqual(await camera(), before);
       assert.equal(await marker(1).evaluate(el => el.style.backgroundColor), "rgb(148, 98, 0)");
+
+      // Confirmed country changes update the very same popup and ID. Unknown
+      // and omitted facts cannot retain any data from the previous country.
+      await page.evaluate(() => { window.originalFactsPopup = document.querySelector(".capital-popup"); });
+      for (const [country, expected, code] of [
+        ["Japan", ["Asia", "123,000,000", "Japanese yen (JPY)"], "jp"],
+        ["Unknown <img src=x onerror=alert(1)>", ["—", "—", "—"], null],
+        ["Germany", ["Europe", "83,200,000", "Euro (EUR)"], "de"],
+      ]) {
+        await action("Edit");
+        await page.getByLabel("Country name", { exact: true }).fill(country);
+        await button("Save changes").click();
+        await closed();
+        assert.deepEqual(await facts(), expected);
+        assert.equal(await page.locator(".popup-country").textContent(), country);
+        assert.equal(await page.locator(".popup-country img").count(), 0);
+        if (code) assert.match(await page.locator(".capital-popup .country-flag img").getAttribute("src"), new RegExp(`/${code}.svg$`));
+        else assert.equal(await page.locator(".capital-popup .country-flag img").count(), 0);
+        assert.equal(await page.evaluate(() => window.originalFactsPopup === document.querySelector(".capital-popup")
+          && window.originalPopupMarker === document.querySelector(".capital-marker")), true);
+        assert.equal((await state()).selectedCapitalId, 1);
+        assert.equal(await button("Gold marker").getAttribute("aria-pressed"), "true");
+        assert.deepEqual(await camera(), before);
+      }
 
       // Coordinates use the existing one-flight reconciliation by ID.
       await action("Edit");
@@ -303,6 +343,9 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       await closed();
       if (collapsed) await button("Collapse sidebar").click();
       await openMarker(3);
+      assert.deepEqual(await facts(), ["Asia, Europe", "0", "An exceptionally long currency name that must wrap safely inside the small popup (EUR), JPY, US dollar (USD)"]);
+      assert.equal(await popupBounds(), true);
+      assert.equal(await page.locator(".popup-facts dd").last().evaluate(el => el.getBoundingClientRect().height > 36), true);
       // Even when long text needs internal scrolling, every swatch and the
       // header action can be reached without horizontal overflow.
       await button("Gold marker").scrollIntoViewIfNeeded();

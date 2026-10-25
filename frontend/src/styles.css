@@ -127,6 +127,9 @@ button:disabled { opacity: 0.65; cursor: wait; }
 .popup-country { grid-column: 2; margin-top: 0.25rem; color: #426079; }
 .popup-coordinates, .popup-colors { grid-column: 1 / -1; }
 .popup-coordinates { margin-top: 0.8rem; color: #426079; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.popup-facts { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.5rem 0.75rem; margin: 0.75rem 0 0; padding-top: 0.75rem; border-top: 1px solid #e6ecef; font-size: 0.75rem; }
+.popup-facts dt { color: #426079; }
+.popup-facts dd { min-width: 0; margin: 0; text-align: right; color: #12334b; font-weight: 600; font-variant-numeric: tabular-nums; }
 .popup-colors { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e6ecef; }
 .popup-colors > p { color: #426079; font-size: 0.8rem; }
 .color-swatches { display: flex; gap: 0.5rem; margin-top: 0.5rem; }

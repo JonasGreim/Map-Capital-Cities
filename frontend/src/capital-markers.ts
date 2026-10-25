@@ -4,6 +4,7 @@ import type { Capital } from "./api";
 import { updateCountryFlag } from "./country-flag";
 import { markerColors } from "./marker-colors";
 import { readMarkerColor, saveMarkerColor } from "./marker-color-storage";
+import { countryFacts } from "./country-facts";
 
 export { markerColors } from "./marker-colors";
 
@@ -18,6 +19,7 @@ type Entry = {
   country?: HTMLParagraphElement;
   flag?: HTMLSpanElement;
   coordinates?: HTMLParagraphElement;
+  facts?: HTMLDListElement;
   actions?: HTMLButtonElement;
   focusColor?: () => void;
   content?: HTMLDivElement;
@@ -35,6 +37,16 @@ export function capitalCamera(capital: Capital, height: number, popupHeight: num
 }
 
 const coordinates = (capital: Capital) => `${capital.latitude.toFixed(4)}, ${capital.longitude.toFixed(4)}`;
+
+function updateFacts(element: HTMLDListElement, capital: Capital) {
+  element.replaceChildren(...countryFacts(capital).flatMap(([label, value]) => {
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const description = document.createElement("dd");
+    description.textContent = value;
+    return [term, description];
+  }));
+}
 
 // Each ID owns its marker and current color for as long as it is in the data.
 export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelectionChange: (id: number | null, closedId?: number) => void = () => {},
@@ -90,6 +102,9 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
     location.className = "popup-coordinates";
     location.setAttribute("aria-label", `Latitude ${entry.capital.latitude}, longitude ${entry.capital.longitude}`);
     location.textContent = coordinates(entry.capital);
+    const facts = document.createElement("dl");
+    facts.className = "popup-facts";
+    updateFacts(facts, entry.capital);
     const colors = document.createElement("div");
     colors.className = "popup-colors";
     colors.setAttribute("role", "group");
@@ -124,7 +139,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
       return button;
     });
     colors.append(label, swatches);
-    content.append(heading, country, location, colors, flag);
+    content.append(heading, country, location, facts, colors, flag);
     const trigger = document.createElement("button");
     trigger.type = "button";
     trigger.id = `popup-actions-${entry.capital.id}`;
@@ -159,6 +174,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
       entry.country = undefined;
       entry.flag = undefined;
       entry.coordinates = undefined;
+      entry.facts = undefined;
       entry.actions = undefined;
       entry.focusColor = undefined;
       entry.content = undefined;
@@ -177,6 +193,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
     entry.country = country;
     entry.flag = flag;
     entry.coordinates = location;
+    entry.facts = facts;
     entry.actions = trigger;
     entry.content = content;
     entry.disposePopup = (restoreFocus = true, notifySelection = true) => { returnFocus = restoreFocus; notify = notifySelection; popup.remove(); };
@@ -277,6 +294,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
         entry.popup?.getElement()?.setAttribute("aria-label", `${capital.name}, ${capital.country}: marker color`);
         if (entry.heading) entry.heading.textContent = capital.name;
         if (entry.country) entry.country.textContent = capital.country;
+        if (entry.facts) updateFacts(entry.facts, capital);
         entry.actions?.setAttribute("aria-label", `Map actions for ${capital.name}`);
         if (entry.coordinates) {
           entry.coordinates.textContent = coordinates(capital);

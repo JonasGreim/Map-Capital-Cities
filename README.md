@@ -82,7 +82,7 @@ required for the static checks above.
 ## Data
 
 ```json
-{ "id": 1, "name": "string", "latitude": 0.0, "longitude": 0.0, "country": "string", "flagCode": null, "continents": null }
+{ "id": 1, "name": "string", "latitude": 0.0, "longitude": 0.0, "country": "string", "flagCode": null, "continents": null, "population": null, "currencies": null }
 ```
 
 `db/schema.sql` creates `capitals` with an automatically generated integer ID,
@@ -194,7 +194,7 @@ needed. Names match after trimming and lowercasing, without aliases or fuzzy
 matching. Conflicting or invalid metadata and unknown names resolve to `null`.
 GET list/name and successful POST/PUT derive the code from the record's current
 country, including existing and manually created rows. POST/PUT still accept
-**only** `name`, `country`, `latitude`, and `longitude`; sending either metadata field is rejected.
+**only** `name`, `country`, `latitude`, and `longitude`; sending metadata fields is rejected.
 
 `continents` is read-only response metadata (`string[]` or `null`), from the v5
 [`continents` field](https://restcountries.com/docs/countries#field-reference),
@@ -212,6 +212,18 @@ POST/PUT and reset decorate the record's **current country** from the same looku
 Reset immediately retains metadata; it needs no additional fetch or migration.
 The frontend validates optional metadata and treats unknown/invalid countries as
 unmapped. Metadata refreshes on backend restart.
+
+Capital popups show exactly three read-only country facts: **Continent** (all
+verified continents), **Country population** (the whole country, not the city),
+and **Currency** (all valid names/codes). `population` (`number | null`) and
+`currencies` (`{ code: string; name?: string }[] | null`) come from the existing
+[REST Countries v5](https://restcountries.com/docs/countries) backend startup
+import and in-memory lookup. Only safe nonnegative integer populations are
+accepted, including zero. Currency codes/names are validated and deduplicated;
+conflicting metadata becomes unknown independently for each field. Missing facts
+display `—`. Opening a popup makes no additional requests; changing its country
+refreshes or clears all facts after the confirmed response. POST/PUT still accept
+only the original four editable fields and reject all metadata fields.
 
 | Method | Path | Success response |
 | --- | --- | --- |
