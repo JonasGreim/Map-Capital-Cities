@@ -50,6 +50,14 @@ export async function verifyMapSelection(page, baseURL, screenshotDirectory) {
   const evidence = [];
   for (const [width, height] of [[1440, 900], [390, 844], [320, 568]]) {
     await page.setViewportSize({ width, height });
+    // Viewport changes resolve before ResizeObserver/Mapbox update the canvas.
+    // A flight started with the previous canvas size can finish off target.
+    await page.waitForFunction(() => {
+      const canvas = document.querySelector(".mapboxgl-canvas");
+      const map = document.querySelector(".map");
+      return canvas && map && canvas.clientWidth === map.clientWidth && canvas.clientHeight === map.clientHeight
+        && (!window.selectionMap || !window.selectionMap.isMoving());
+    });
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await search.fill("Prague");
     await row("Prague").focus();
@@ -143,6 +151,9 @@ export async function verifyMapSelection(page, baseURL, screenshotDirectory) {
     await page.mouse.move(centerX + 50, centerY + 20, { steps: 8 });
     await page.mouse.up();
     await page.waitForFunction(previous => Math.abs(window.selectionMap.getCenter().lng - previous) > 0.01, longitude);
+    // Movement alone is observable before drag inertia finishes. Keep the next
+    // viewport scenario independent of that still-running gesture.
+    await settled();
   }
   // Edit an active capital, then refresh and delete it, retaining colors and ID.
   await search.fill("Prague");

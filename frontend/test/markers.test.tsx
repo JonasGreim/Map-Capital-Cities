@@ -20,6 +20,9 @@ class Element extends EventTarget {
   width = 0;
   height = 0;
   hidden = false;
+  complete = false;
+  naturalWidth = 0;
+  onload?: () => void;
   onerror?: () => void;
   private markup = "";
   set innerHTML(value: string) { this.children = []; this.markup = value; }
@@ -335,6 +338,11 @@ test("popup flags use validated metadata, fall back on image failure and update 
   assert.equal(image.src, "https://flags.restcountries.com/v5/svg/de.svg");
   assert.equal(image.alt, "");
   assert.deepEqual([image.width, image.height], [40, 30]);
+  assert.equal(image.hidden, true);
+  image.complete = true;
+  image.naturalWidth = 40;
+  image.onload!();
+  assert.equal(image.hidden, false);
   image.onerror!();
   assert.equal(image.hidden, true);
   assert.match(flag.innerHTML, /<svg/);
@@ -342,6 +350,10 @@ test("popup flags use validated metadata, fall back on image failure and update 
   const focus = dom.activeElement;
   controller.update([{ ...berlin, country: "Czechia", flagCode: "CZ" }]);
   assert.equal(flag.children[0].src, "https://flags.restcountries.com/v5/svg/cz.svg");
+  assert.equal(flag.children[0].hidden, true);
+  flag.children[0].complete = true;
+  flag.children[0].naturalWidth = 40;
+  flag.children[0].onload!();
   assert.equal(flag.children[0].hidden, false);
   assert.equal(dom.activeElement, focus);
   assert.equal(flights.length, 1);
@@ -353,4 +365,18 @@ test("popup flags use validated metadata, fall back on image failure and update 
     assert.equal(flag.children.length, 0);
     assert.match(flag.innerHTML, /<svg/);
   }
+});
+
+test("popup flags reveal already cached images even without a later load event", (t) => {
+  const { controller, markers, popups } = setup(t);
+  t.mock.method(dom, "createElement", (tag: string) => {
+    const element = new Element(tag);
+    if (tag === "img") { element.complete = true; element.naturalWidth = 40; }
+    return element;
+  });
+  controller.update([{ ...berlin, flagCode: "DE" }]);
+  markers[0].options.element.click();
+  assert.equal(popups[0].content!.children[4].children[0].hidden, false);
+  controller.update([{ ...berlin, country: "Czechia", flagCode: "CZ" }]);
+  assert.equal(popups[0].content!.children[4].children[0].hidden, false);
 });

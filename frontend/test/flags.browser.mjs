@@ -13,6 +13,18 @@ export async function verifyFlags(page, baseURL, screenshotDirectory) {
   const pageErrors = [];
   page.on("pageerror", error => pageErrors.push(error.message));
   const cdn = [];
+  let releaseGermany;
+  const germanyGate = new Promise(resolve => { releaseGermany = resolve; });
+  let releaseAntarctica;
+  const antarcticaGate = new Promise(resolve => { releaseAntarctica = resolve; });
+  await page.route("https://flags.restcountries.com/v5/svg/de.svg", async route => {
+    await germanyGate;
+    await route.continue();
+  });
+  await page.route("https://flags.restcountries.com/v5/svg/aq.svg", async route => {
+    await antarcticaGate;
+    await route.continue();
+  });
   page.on("response", response => {
     if (/flags\.restcountries\.com\/v5\/svg\/(de|cz)\.svg$/.test(response.url())) cdn.push({ url: response.url(), status: response.status() });
   });
@@ -28,18 +40,27 @@ export async function verifyFlags(page, baseURL, screenshotDirectory) {
     const input = request.postDataJSON();
     assert.deepEqual(Object.keys(input).sort(), ["country", "latitude", "longitude", "name"]);
     const saved = { ...input, id: request.method() === "POST" ? 20 : id,
-      flagCode: input.country === "Germany" ? "DE" : input.country === "Czechia" ? "CZ" : null };
+      flagCode: input.country === "Germany" ? "DE" : input.country === "Czechia" ? "CZ" : input.country === "Antarctica" ? "AQ" : null };
     records = request.method() === "POST" ? [...records, saved] : records.map(record => record.id === id ? saved : record);
     return route.fulfill({ status: request.method() === "POST" ? 201 : 200, json: saved });
   });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto(baseURL);
+  await page.goto(baseURL, { waitUntil: "domcontentloaded" });
   await page.locator(".capital-marker").first().waitFor();
   const button = name => page.getByRole("button", { name, exact: true });
   const row = (name, country) => button(`Show ${name}, ${country} on map`);
+  const assertLoading = async locator => {
+    assert.equal(await locator.locator("img").evaluate(image => image.hidden && !image.complete), true);
+    assert.equal(await locator.locator(".country-flag svg").isVisible(), true);
+    assert.deepEqual(await locator.locator(".country-flag").evaluate(element => [element.offsetWidth, element.offsetHeight]), [40, 30]);
+  };
+  await assertLoading(row("Berlin", "Germany"));
+  await row("Berlin", "Germany").click();
+  await assertLoading(page.locator(".capital-popup"));
+  releaseGermany();
   const assertImage = async (locator, code) => {
-    await page.waitForFunction(url => [...document.images].some(image => image.src === url && image.complete && image.naturalWidth > 0), `https://flags.restcountries.com/v5/svg/${code}.svg`);
     const image = locator.locator("img");
+    await page.waitForFunction(image => image.complete && image.naturalWidth > 0 && !image.hidden, await image.elementHandle());
     assert.match(await image.getAttribute("src"), new RegExp(`/svg/${code}\\.svg$`));
     assert.equal(await image.evaluate(image => image.complete && image.naturalWidth > 0 && !image.hidden), true);
     assert.equal(await image.getAttribute("alt"), "");
@@ -63,7 +84,10 @@ export async function verifyFlags(page, baseURL, screenshotDirectory) {
     await page.keyboard.press("Escape");
     assert.equal(await marker.evaluate(element => element === document.activeElement), true);
     await row("Paris", "France").click();
-    await page.waitForFunction(() => document.querySelector(".capital-popup img")?.hidden === true);
+    await page.waitForFunction(() => {
+      const image = document.querySelector(".capital-popup img");
+      return image?.hidden && image.complete && image.naturalWidth === 0;
+    });
     assert.equal(await popup.locator(".country-flag svg").isVisible(), true);
     assert.equal(await row("Paris", "France").locator("img").evaluate(image => image.hidden), true);
     const geometry = await page.evaluate(() => ({
@@ -78,6 +102,17 @@ export async function verifyFlags(page, baseURL, screenshotDirectory) {
   }
   // Update the selected row through the real form/store and retain popup/color.
   await row("Berlin", "Germany").click();
+  await button("Actions for Berlin").click();
+  await button("Edit").click();
+  await page.getByLabel("Country name", { exact: true }).fill("Antarctica");
+  await button("Save changes").click();
+  await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
+  await assertLoading(row("Berlin", "Antarctica"));
+  await assertLoading(page.locator(".capital-popup"));
+  releaseAntarctica();
+  await assertImage(row("Berlin", "Antarctica"), "aq");
+  await assertImage(page.locator(".capital-popup"), "aq");
+  // Czechia already loaded in the Prague row: also exercise decoded image reuse.
   await button("Actions for Berlin").click();
   await button("Edit").click();
   await page.getByLabel("Country name", { exact: true }).fill("Czechia");
@@ -103,5 +138,5 @@ export async function verifyFlags(page, baseURL, screenshotDirectory) {
   assert.deepEqual(pageErrors, []);
   assert.ok(cdn.some(response => response.url.endsWith("de.svg") && response.status === 200));
   assert.ok(cdn.some(response => response.url.endsWith("cz.svg") && response.status === 200));
-  return { viewports, realCdn: cdn, imageFailureFallback: true, countryEdit: true, manualCreateDelete: true, pageErrors };
+  return { viewports, realCdn: cdn, loadingGlobe: true, imageFailureFallback: true, countryEditLoadingReset: true, countryEdit: true, manualCreateDelete: true, pageErrors };
 }
