@@ -20,6 +20,8 @@ class Element extends EventTarget {
   width = 0;
   height = 0;
   hidden = false;
+  disabled = false;
+  tabIndex = 0;
   complete = false;
   naturalWidth = 0;
   onload?: () => void;
@@ -395,4 +397,60 @@ test("reset closes selection and restores every marker to Teal without camera mo
   assert.ok(markers.every(marker => marker.options.element.style.backgroundColor === markerColors[0].value));
   controller.select(berlin.id);
   assert.equal(popups[2].content!.children[3].children[1].children[0].attributes.get("aria-pressed"), "true");
+});
+
+test("continent visibility retains instances and colors, blocks hidden activation and clears popup without hidden focus or flights", (t) => {
+  const { controller, markers, popups, canvas, selections, flights } = setup(t);
+  const europe = { ...berlin, continents: ["Europe" as const] };
+  const asia = { ...paris, continents: ["Asia" as const] };
+  controller.update([europe, asia]);
+  controller.select(europe.id, true);
+  choose(popups[0], markerColors[1].value);
+  const before = flights.length;
+  controller.setContinent("Asia");
+  const button = markers[0].options.element;
+  assert.equal(button.hidden, true);
+  assert.equal(button.disabled, true);
+  assert.equal(button.tabIndex, -1);
+  assert.equal(popups[0].removed, true);
+  assert.equal(dom.activeElement, canvas);
+  assert.deepEqual(selections, [null]);
+  button.click(); // Even a synthetic event cannot select a hidden entry.
+  controller.select(europe.id, true);
+  assert.equal(popups.length, 1);
+  assert.equal(flights.length, before);
+  for (const continent of ["", "Europe", "Asia", ""] as const) controller.setContinent(continent);
+  assert.equal(markers.length, 2);
+  assert.ok(markers.every(marker => !marker.removed && !marker.options.element.hidden));
+  assert.equal(button.disabled, false);
+  assert.equal(button.tabIndex, 0);
+  assert.equal(button.style.backgroundColor, markerColors[1].value);
+  assert.equal(flights.length, before);
+  controller.select(europe.id);
+  assert.equal(popups[1].content!.children[3].children[1].children[1].attributes.get("aria-pressed"), "true");
+});
+
+test("filtered CRUD and reset reconcile visibility while only actual deletion releases markers", (t) => {
+  const { controller, markers, popups, flights } = setup(t);
+  const europe = { ...berlin, continents: ["Europe" as const] };
+  controller.setContinent("Europe");
+  controller.update([europe, paris]);
+  assert.equal(markers[1].options.element.hidden, true); // Unknown country.
+  controller.select(europe.id);
+  choose(popups[0], markerColors[2].value);
+  controller.update([{ ...europe, country: "Japan", continents: ["Asia"], latitude: 20 }, paris]);
+  assert.equal(popups[0].removed, true);
+  assert.equal(flights.length, 0); // Excluded edit cannot navigate either.
+  assert.equal(markers[0].options.element.hidden, true);
+  controller.update([europe, paris]);
+  assert.equal(markers[0].options.element.style.backgroundColor, markerColors[2].value);
+  assert.equal(markers[0].options.element.hidden, false);
+  controller.update([europe]);
+  assert.equal(markers[1].removed, true);
+  controller.reset();
+  controller.update([{ ...europe, id: 101 }, { ...paris, id: 102 }]);
+  assert.equal(markers[0].removed, true);
+  assert.equal(markers[2].options.element.hidden, false);
+  assert.equal(markers[3].options.element.hidden, true);
+  assert.equal(markers[2].options.element.style.backgroundColor, markerColors[0].value);
 });

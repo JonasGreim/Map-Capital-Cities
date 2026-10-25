@@ -16,7 +16,7 @@ test("PostgreSQL reset restores defaults atomically in an isolated schema", {
   const schema = `reset_${randomUUID().replaceAll("-", "")}`;
   const admin = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
   const db = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL, options: `-c search_path=${schema}` });
-  const app = buildApp(db, new Map([["germany", "DE"]]));
+  const app = buildApp(db, new Map([["germany", { flagCode: "DE", continents: ["Europe"] }]]));
   t.after(async () => {
     await app.close();
     await db.end();
@@ -51,6 +51,7 @@ test("PostgreSQL reset restores defaults atomically in an isolated schema", {
     assert.ok(restored.every(row => row.id > Math.max(...before.map(capital => capital.id))));
     assert.equal(response.json<Capital[]>().find(row => row.name === "Berlin")!.latitude, berlin.latitude);
     assert.equal(response.json().find((row: Capital) => row.name === "Berlin").flagCode, "DE");
+    assert.deepEqual(response.json().find((row: Capital) => row.name === "Berlin").continents, ["Europe"]);
     assert.equal(response.json().length, 248);
   });
   await t.test("an explicit repeat restores the same values without reusing IDs", async () => {

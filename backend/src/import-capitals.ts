@@ -28,19 +28,37 @@ function nonempty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0 && !value.includes("\0");
 }
 
-const countryKey = (name: string) => name.trim().toLowerCase();
+export type CountryMetadata = { flagCode: string | null; continents: string[] | null };
+export type CountryMetadataLookup = ReadonlyMap<string, CountryMetadata>;
 
-export function countryFlagCode(codes: ReadonlyMap<string, string | null>, country: string): string | null {
-  return codes.get(countryKey(country)) ?? null;
+// Verified v5 continents values; North and South America stay separate.
+const continentNames = ["Africa", "Antarctica", "Asia", "Europe", "North America", "Oceania", "South America"];
+function normalizeContinents(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const names = value.map(item => typeof item === "string"
+    ? continentNames.find(name => name.toLowerCase() === item.trim().toLowerCase()) : undefined);
+  if (names.some(name => name === undefined)) return null;
+  return continentNames.filter(name => names.includes(name));
 }
 
-function collectFlagCode(codes: Map<string, string | null>, record: unknown) {
+const countryKey = (name: string) => name.trim().toLowerCase();
+
+export function countryMetadata(metadata: CountryMetadataLookup, country: string): CountryMetadata {
+  return metadata.get(countryKey(country)) ?? { flagCode: null, continents: null };
+}
+
+function collectMetadata(metadata: Map<string, CountryMetadata>, record: unknown) {
   if (!object(record) || !object(record.names) || !nonempty(record.names.common)) return;
   const name = countryKey(record.names.common);
-  const code = object(record.codes) && typeof record.codes.alpha_2 === "string"
+  const flagCode = object(record.codes) && typeof record.codes.alpha_2 === "string"
     && record.codes.alpha_2.length === 2 && /^[A-Z]{2}$/.test(record.codes.alpha_2) ? record.codes.alpha_2 : null;
-  // Conflicting or malformed metadata for the same name must never pick a flag.
-  codes.set(name, codes.has(name) && codes.get(name) !== code ? null : code);
+  const continents = normalizeContinents(record.continents);
+  const previous = metadata.get(name);
+  // Each field fails closed independently; ambiguity remains sticky across pages.
+  metadata.set(name, {
+    flagCode: previous && previous.flagCode !== flagCode ? null : flagCode,
+    continents: previous && JSON.stringify(previous.continents) !== JSON.stringify(continents) ? null : continents,
+  });
 }
 
 function capitalFrom(value: unknown): Capital | undefined {
@@ -59,13 +77,13 @@ export async function importCapitals(
   database: Pick<Pool, "connect">,
   apiKey: string | undefined,
   fetchPage: typeof fetch = fetch,
-): Promise<ImportStats & { flagCodes: ReadonlyMap<string, string | null> }> {
+): Promise<ImportStats & { metadata: CountryMetadataLookup }> {
   const stats: ImportStats = { pages: 0, fetched: 0, skippedInvalid: 0, skippedExisting: 0, inserted: 0 };
   function fail(message: string): never { throw new ImportError(message, { ...stats }); }
   if (!apiKey?.trim()) fail("RESTCOUNTRIES_API_KEY is required; import not started");
 
   const capitals: Capital[] = [];
-  const flagCodes = new Map<string, string | null>();
+  const metadata = new Map<string, CountryMetadata>();
   const seenPages = new Set<string>();
   let offset = 0;
   let expectedTotal: number | undefined;
@@ -127,7 +145,7 @@ export async function importCapitals(
     stats.pages++;
     stats.fetched += objects.length;
     for (const record of objects) {
-      collectFlagCode(flagCodes, record);
+      collectMetadata(metadata, record);
       const capital = capitalFrom(record);
       if (capital) capitals.push(capital);
       else stats.skippedInvalid++;
@@ -165,5 +183,5 @@ export async function importCapitals(
   stats.inserted = inserted;
   stats.skippedExisting = capitals.length - inserted;
   // Metadata becomes available to the caller only after every page and COMMIT succeed.
-  return { ...stats, flagCodes };
+  return { ...stats, metadata };
 }

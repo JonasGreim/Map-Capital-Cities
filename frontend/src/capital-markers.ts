@@ -1,4 +1,5 @@
 import mapboxgl from "mapbox-gl";
+import { matchesContinent, type ContinentFilter } from "./continent-filter";
 import type { Capital } from "./api";
 import { updateCountryFlag } from "./country-flag";
 
@@ -14,6 +15,7 @@ type Entry = {
   marker: mapboxgl.Marker;
   button: HTMLButtonElement;
   color: string;
+  visible: boolean;
   popup?: mapboxgl.Popup;
   heading?: HTMLHeadingElement;
   country?: HTMLParagraphElement;
@@ -40,6 +42,21 @@ const coordinates = (capital: Capital) => `${capital.latitude.toFixed(4)}, ${cap
 export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelectionChange: (id: number | null, closedId?: number) => void = () => {}) {
   const entries = new globalThis.Map<number, Entry>();
   let active: Entry | undefined;
+  let continent: ContinentFilter = "";
+
+  function updateVisibility(entry: Entry) {
+    const visible = matchesContinent(entry.capital, continent);
+    const hadFocus = entry.button === document.activeElement || entry.popup?.getElement()?.contains(document.activeElement);
+    entry.visible = visible;
+    entry.button.hidden = !visible;
+    entry.button.disabled = !visible;
+    entry.button.tabIndex = visible ? 0 : -1;
+    entry.button.setAttribute("aria-hidden", String(!visible));
+    if (!visible) {
+      entry.disposePopup?.(false);
+      if (hadFocus) map.getCanvas().focus({ preventScroll: true });
+    }
+  }
 
   function navigate(entry: Entry, zoom?: number) {
     map.stop();
@@ -58,7 +75,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
   }
 
   function open(entry: Entry) {
-    if (entry.popup) return;
+    if (!entry.visible || entry.popup) return;
     active?.disposePopup?.(false, false);
     const content = document.createElement("div");
     content.className = "capital-popup";
@@ -171,6 +188,10 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
   }
 
   return {
+    setContinent(value: ContinentFilter) {
+      continent = value;
+      for (const entry of entries.values()) updateVisibility(entry);
+    },
     reset() {
       map.stop();
       active?.disposePopup?.(false, false);
@@ -182,7 +203,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
     select(id: number | null, fromList = false) {
       if (id === null) { active?.disposePopup?.(false, false); return; }
       const entry = entries.get(id);
-      if (!entry) return;
+      if (!entry?.visible) return;
       open(entry);
       if (fromList) {
         navigate(entry);
@@ -218,9 +239,10 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
           // Mapbox assigns role="img" even to custom elements.
           button.setAttribute("role", "button");
           const created: Entry = {
-            capital, marker, button, color: markerColors[0].value,
+            capital, marker, button, color: markerColors[0].value, visible: true,
             open: (event) => {
               event.stopPropagation();
+              if (!created.visible) return;
               open(created);
               onSelectionChange(created.capital.id);
               // Keep edge popups in the map without changing the user's zoom.
@@ -234,6 +256,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
         const moved = entry.capital.latitude !== capital.latitude || entry.capital.longitude !== capital.longitude;
         if (entry.flag && entry.capital.flagCode !== capital.flagCode) updateCountryFlag(entry.flag, capital.flagCode);
         entry.capital = capital;
+        updateVisibility(entry);
         entry.button.setAttribute("aria-label", `${capital.name}, ${capital.country}: change marker color`);
         entry.marker.setLngLat([capital.longitude, capital.latitude]);
         entry.popup?.setLngLat([capital.longitude, capital.latitude]);

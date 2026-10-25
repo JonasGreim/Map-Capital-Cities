@@ -61,7 +61,7 @@ export async function verifySidebar(page, baseURL) {
     await search.fill("pRaGuE");
     assert.equal(await page.locator(".capital-list li").count(), 1);
     await search.fill("no such place");
-    await page.getByText("No matching capitals. Try another capital or country.").waitFor();
+    await page.getByText("No matching capitals. Try another search or continent.").waitFor();
     assert.equal(await page.locator("#search-results-count").textContent(), "0 of 23 capitals");
     await button("Collapse sidebar").click();
     assert.equal(await page.locator("#capital-sidebar").isVisible(), false);

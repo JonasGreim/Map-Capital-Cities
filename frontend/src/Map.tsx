@@ -10,6 +10,7 @@ export function Map() {
   const [mapError, setMapError] = useState(false);
   const [resourceError, setResourceError] = useState(false);
   const markers = useRef<ReturnType<typeof createCapitalMarkers>>();
+  const continent = useCapitalStore((state) => state.continent);
   const capitals = useCapitalStore((state) => state.capitals);
   const selectionVersion = useCapitalStore((state) => state.selectionVersion);
   const selectedCapitalId = useCapitalStore((state) => state.selectedCapitalId);
@@ -67,6 +68,7 @@ export function Map() {
     };
   }, []);
 
+  useEffect(() => { markers.current?.setContinent(continent); }, [continent]);
   useEffect(() => {
     if (appliedReset.current !== resetVersion) {
       markers.current?.reset();

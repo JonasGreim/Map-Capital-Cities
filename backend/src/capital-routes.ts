@@ -1,6 +1,6 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { capitalStore, type Capital, type CapitalResponse, type CapitalDatabase, type CapitalInput } from "./capitals.js";
-import { countryFlagCode } from "./import-capitals.js";
+import { countryMetadata, type CountryMetadataLookup } from "./import-capitals.js";
 
 const text = { type: "string", minLength: 1, pattern: "\\S", not: { pattern: "\u0000" } };
 const body = {
@@ -33,9 +33,9 @@ async function requireJson(request: FastifyRequest, reply: FastifyReply) {
   }
 }
 
-export function capitalRoutes(app: FastifyInstance, database: CapitalDatabase, flagCodes: ReadonlyMap<string, string | null>) {
+export function capitalRoutes(app: FastifyInstance, database: CapitalDatabase, metadata: CountryMetadataLookup) {
   const store = capitalStore(database);
-  const response = (capital: Capital): CapitalResponse => ({ ...capital, flagCode: countryFlagCode(flagCodes, capital.country) });
+  const response = (capital: Capital): CapitalResponse => ({ ...capital, ...countryMetadata(metadata, capital.country) });
 
   // Scoped to capital routes so the existing health error contract stays intact.
   app.setErrorHandler<FastifyError>((error, _request, reply) => {

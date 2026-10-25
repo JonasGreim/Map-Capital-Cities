@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Pool } from "pg";
-import { ImportError, importCapitals, countryFlagCode } from "../src/import-capitals.js";
+import { ImportError, importCapitals, countryMetadata } from "../src/import-capitals.js";
 
 function country(name = "Berlin", common = "Germany", lat: unknown = 52.52, lng: unknown = 13.405) {
   return { names: { common }, capitals: [{ name, coordinates: { lat, lng } }] };
@@ -46,7 +46,7 @@ test("imports every metadata page, maps only the first capital and sends v5 bear
   second.capitals.push({ name: "Ignored", coordinates: { lat: 1, lng: 1 } });
   const fetcher = responses(page(records, 0, 101), page([second], 100, 101));
   const offsets: string[] = [];
-  const { flagCodes, ...stats } = await importCapitals(db.db, "test-key", async (input, init) => {
+  const { metadata, ...stats } = await importCapitals(db.db, "test-key", async (input, init) => {
     const url = new URL(String(input));
     assert.equal(url.origin + url.pathname, "https://api.restcountries.com/countries/v5");
     assert.equal(url.searchParams.get("limit"), "100");
@@ -58,7 +58,7 @@ test("imports every metadata page, maps only the first capital and sends v5 bear
     return fetcher(input, init);
   });
   assert.deepEqual(offsets, ["0", "100"]);
-  assert.equal(flagCodes.size, 101);
+  assert.equal(metadata.size, 101);
   assert.deepEqual(stats, { pages: 2, fetched: 101, skippedInvalid: 0, skippedExisting: 0, inserted: 101 });
   assert.deepEqual(db.queries.at(-2)?.values, ["Ottawa", 0, -180, "Canada"]);
   assert.equal(db.queries[0].sql, "BEGIN");
@@ -205,45 +205,71 @@ test("flag metadata spans all pages, includes countries without capitals and sur
   assert.equal(result.skippedExisting, 2);
   assert.equal(result.skippedInvalid, 1);
   for (const [country, code] of [[" GERMANY ", "DE"], ["czechia", "CZ"], ["Antarctica", "AQ"]]) {
-    assert.equal(countryFlagCode(result.flagCodes, country), code);
+    assert.equal(countryMetadata(result.metadata, country).flagCode, code);
   }
-  assert.equal(countryFlagCode(result.flagCodes, "Deutschland"), null);
-  assert.equal(countryFlagCode(result.flagCodes, "Unknown"), null);
+  assert.equal(countryMetadata(result.metadata, "Deutschland").flagCode, null);
+  assert.equal(countryMetadata(result.metadata, "Unknown").flagCode, null);
 });
 
 test("flag metadata validates exact codes and names and permanently suppresses ambiguous names", async () => {
-  const metadata = (common: unknown, alpha_2: unknown) => ({ names: { common }, codes: { alpha_2 } });
-  const objects = [metadata(" Same ", "DE"), metadata("SAME", "CZ"), metadata("same", "DE"),
-    metadata("Repeated", "FR"), metadata("repeated", "FR"),
-    ...[undefined, null, 42, "", "de", " DE ", "DE\n", "DEU", "D1", "../de", "DÉ"].map((code, i) => metadata(`Invalid ${i}`, code)),
-    metadata(" ", "DE"), metadata(null, "DE"), metadata(12, "DE"), metadata("Bad\0name", "DE"),
-    metadata("Incomplete", "DE"), metadata("incomplete", null), metadata("incomplete", "DE"),
+  const record = (common: unknown, alpha_2: unknown) => ({ names: { common }, codes: { alpha_2 } });
+  const objects = [record(" Same ", "DE"), record("SAME", "CZ"), record("same", "DE"),
+    record("Repeated", "FR"), record("repeated", "FR"),
+    ...[undefined, null, 42, "", "de", " DE ", "DE\n", "DEU", "D1", "../de", "DÉ"].map((code, i) => record(`Invalid ${i}`, code)),
+    record(" ", "DE"), record(null, "DE"), record(12, "DE"), record("Bad\0name", "DE"),
+    record("Incomplete", "DE"), record("incomplete", null), record("incomplete", "DE"),
     { names: { common: "No codes" } }, null];
-  const { flagCodes } = await importCapitals(database().db, "test", responses(page(objects, 0, objects.length)));
-  assert.equal(countryFlagCode(flagCodes, "same"), null);
-  assert.equal(countryFlagCode(flagCodes, "Repeated"), "FR");
-  assert.equal(countryFlagCode(flagCodes, "Incomplete"), null);
-  assert.equal([...flagCodes.values()].filter(code => code !== null).length, 1);
-  assert.equal(flagCodes.has("bad\0name"), false);
+  const { metadata } = await importCapitals(database().db, "test", responses(page(objects, 0, objects.length)));
+  assert.equal(countryMetadata(metadata, "same").flagCode, null);
+  assert.equal(countryMetadata(metadata, "Repeated").flagCode, "FR");
+  assert.equal(countryMetadata(metadata, "Incomplete").flagCode, null);
+  assert.equal([...metadata.values()].filter(value => value.flagCode !== null).length, 1);
+  assert.equal(metadata.has("bad\0name"), false);
 });
 
-test("later-page, pagination, connection and transaction failures cannot publish partial flag metadata", async () => {
-  const record = { ...country(), codes: { alpha_2: "DE" } };
+test("later-page, pagination, connection and transaction failures cannot publish partial country metadata", async () => {
+  const record = { ...country(), codes: { alpha_2: "DE" }, continents: ["Europe"] };
   const initial = await importCapitals(database().db, "test", responses(page([record], 0, 1)));
-  let published = initial.flagCodes;
+  let published = initial.metadata;
   for (const [db, fetcher] of [
     [database().db, responses(page([{ ...record, codes: { alpha_2: "CZ" } }], 0, 2), new Response(null, { status: 503 }))],
     [database().db, responses({ data: { objects: [record], meta: {} } })],
     [{ connect: async () => { throw new Error("connection failed"); } } as unknown as Pick<Pool, "connect">, responses(page([record], 0, 1))],
     [database({ failInsert: true }).db, responses(page([record], 0, 1))],
   ] as const) {
-    await assert.rejects(async () => { published = (await importCapitals(db, "test", fetcher)).flagCodes; }, error => {
+    await assert.rejects(async () => { published = (await importCapitals(db, "test", fetcher)).metadata; }, error => {
       assert.ok(error instanceof ImportError);
-      assert.equal("flagCodes" in error, false);
-      assert.equal("flagCodes" in error.stats, false);
+      assert.equal("metadata" in error, false);
+      assert.equal("metadata" in error.stats, false);
       return true;
     });
-    assert.equal(published, initial.flagCodes);
-    assert.equal(countryFlagCode(published, "Germany"), "DE");
+    assert.equal(published, initial.metadata);
+    assert.deepEqual(countryMetadata(published, "Germany"), { flagCode: "DE", continents: ["Europe"] });
+  }
+});
+
+test("continent metadata validates and normalizes all pages independently of valid capitals and flags", async () => {
+  const records = [
+    { ...country(), codes: { alpha_2: "DE" }, continents: [" europe ", "EUROPE"] },
+    { names: { common: "Antarctica" }, capitals: [], continents: ["Antarctica"] },
+    { ...country("Ankara", "Turkey"), continents: ["Europe", "Asia"] },
+    { names: { common: " TURKEY " }, continents: [" asia ", "Europe", "Asia"] },
+    ...[undefined, null, [], "Europe", [null], [42], [""], ["Atlantis"], ["Europe", "Atlantis"]]
+      .map((continents, i) => ({ names: { common: `Invalid ${i}` }, continents })),
+    { names: { common: "Contradictory" }, continents: ["Europe"] },
+    { names: { common: "contradictory" }, continents: ["Asia"] },
+    { names: { common: "CONTRADICTORY" }, continents: ["Europe"] },
+    { names: { common: "Missing later" }, continents: ["Europe"] },
+    { names: { common: "Missing later" } },
+    { names: { common: "Missing later" }, continents: ["Europe"] },
+  ];
+  const result = await importCapitals(database({ rowCount: 0 }).db, "test", responses(
+    page(records.slice(0, 3), 0, records.length), page(records.slice(3), 3, records.length),
+  ));
+  assert.deepEqual(countryMetadata(result.metadata, " GERMANY "), { flagCode: "DE", continents: ["Europe"] });
+  assert.deepEqual(countryMetadata(result.metadata, "Turkey").continents, ["Asia", "Europe"]);
+  assert.deepEqual(countryMetadata(result.metadata, "Antarctica").continents, ["Antarctica"]);
+  for (const name of ["Unknown", "Contradictory", "Missing later", ...Array.from({ length: 9 }, (_, i) => `Invalid ${i}`)]) {
+    assert.equal(countryMetadata(result.metadata, name).continents, null);
   }
 });

@@ -4,9 +4,10 @@ import Fastify from "fastify";
 import { pool } from "./db.js";
 import { capitalRoutes } from "./capital-routes.js";
 import type { CapitalDatabase } from "./capitals.js";
+import type { CountryMetadataLookup } from "./import-capitals.js";
 import { resetRoutes } from "./reset-capitals.js";
 
-export function buildApp(database: CapitalDatabase = pool, flagCodes: ReadonlyMap<string, string | null> = new Map()) {
+export function buildApp(database: CapitalDatabase = pool, metadata: CountryMetadataLookup = new Map()) {
   const app = Fastify({ ajv: { customOptions: { coerceTypes: false, removeAdditional: false } } });
   app.register(cors, { methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"] });
 
@@ -15,8 +16,8 @@ export function buildApp(database: CapitalDatabase = pool, flagCodes: ReadonlyMa
     return { ok: true };
   });
 
-  app.register(async (routes) => { capitalRoutes(routes, database, flagCodes); });
-  app.register(async (routes) => { resetRoutes(routes, database, flagCodes); });
+  app.register(async (routes) => { capitalRoutes(routes, database, metadata); });
+  app.register(async (routes) => { resetRoutes(routes, database, metadata); });
 
   return app;
 }

@@ -18,7 +18,7 @@ function fixture(failAt?: string) {
     release: (failed) => { released = failed; },
   };
   const database = { query: client.query, connect: async () => client };
-  return { app: buildApp(database, new Map([["germany", "DE"]])), database, client, calls, released: () => released };
+  return { app: buildApp(database, new Map([["germany", { flagCode: "DE", continents: ["Europe"] }]])), database, client, calls, released: () => released };
 }
 
 test("reviewed default-v1 has 248 unique valid capitals; invalid snapshots fail closed", () => {
@@ -51,7 +51,7 @@ test("reset succeeds without auth and returns confirmed capitals with existing f
   t.after(() => app.close());
   const response = await app.inject({ method: "POST", url: "/capital-reset", payload: { confirm: true } });
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json(), [{ ...berlin, flagCode: "DE" }]);
+  assert.deepEqual(response.json(), [{ ...berlin, flagCode: "DE", continents: ["Europe"] }]);
   assert.ok(calls.indexOf("BEGIN") < calls.indexOf("DELETE FROM capitals"));
   assert.equal(calls.at(-1), "COMMIT");
   assert.equal(released(), false);

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createCapital, updateCapital, deleteCapital, getCapitals, resetCapitals, type Capital, type CapitalInput } from "./api";
+import { matchesContinent, type ContinentFilter } from "./continent-filter";
 
 type CapitalState = {
   capitals: Capital[];
@@ -10,6 +11,8 @@ type CapitalState = {
   selectionSource: "list" | "map";
   selectionVersion: number;
   resetVersion: number;
+  continent: ContinentFilter;
+  setContinent: (continent: ContinentFilter) => void;
   selectCapital: (id: number | null, source?: "list" | "map") => void;
   fetchCapitals: () => Promise<void>;
   saveCapital: (input: CapitalInput, id?: number) => Promise<void>;
@@ -32,7 +35,7 @@ export const useCapitalStore = create<CapitalState>((set, get) => {
         const capitals = state.capitals.filter((capital) => capital.id !== (saved ? saved.id : id));
         if (saved) capitals.push(saved);
         capitals.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()) || a.id - b.id);
-        return { capitals, error: null, selectedCapitalId: capitals.some((capital) => capital.id === state.selectedCapitalId) ? state.selectedCapitalId : null };
+        return { capitals, error: null, selectedCapitalId: capitals.some((capital) => capital.id === state.selectedCapitalId && matchesContinent(capital, state.continent)) ? state.selectedCapitalId : null };
       });
     } finally { set({ mutating: false }); }
   }
@@ -45,8 +48,13 @@ export const useCapitalStore = create<CapitalState>((set, get) => {
     selectionSource: "list",
     selectionVersion: 0,
     resetVersion: 0,
+    continent: "",
+    setContinent: (continent) => set(state => ({ continent,
+      selectedCapitalId: state.capitals.some(capital => capital.id === state.selectedCapitalId && matchesContinent(capital, continent))
+        ? state.selectedCapitalId : null,
+    })),
     selectCapital: (id, source = "list") => {
-      if (id !== null && !get().capitals.some((capital) => capital.id === id)) return;
+      if (id !== null && !get().capitals.some((capital) => capital.id === id && matchesContinent(capital, get().continent))) return;
       set((state) => ({ selectedCapitalId: id, selectionSource: source, selectionVersion: state.selectionVersion + 1 }));
     },
     saveCapital: (input, id) => mutate(() => id === undefined ? createCapital(input) : updateCapital(id, input)),
@@ -65,7 +73,7 @@ export const useCapitalStore = create<CapitalState>((set, get) => {
       set({ loading: true, error: null });
       pendingRequest = getCapitals()
         .then((capitals) => { set((state) => ({ capitals, loading: false,
-          selectedCapitalId: capitals.some((capital) => capital.id === state.selectedCapitalId) ? state.selectedCapitalId : null })); })
+          selectedCapitalId: capitals.some((capital) => capital.id === state.selectedCapitalId && matchesContinent(capital, state.continent)) ? state.selectedCapitalId : null })); })
         .catch((error: unknown) => {
           set({ loading: false, error: error instanceof Error ? error.message : "Unable to load capitals. Please try again." });
         })
