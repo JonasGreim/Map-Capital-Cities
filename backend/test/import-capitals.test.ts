@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Pool } from "pg";
-import { ImportError, importCapitals } from "../src/import-capitals.js";
+import { ImportError, importCapitals, countryFlagCode } from "../src/import-capitals.js";
 
 function country(name = "Berlin", common = "Germany", lat: unknown = 52.52, lng: unknown = 13.405) {
   return { names: { common }, capitals: [{ name, coordinates: { lat, lng } }] };
@@ -46,7 +46,7 @@ test("imports every metadata page, maps only the first capital and sends v5 bear
   second.capitals.push({ name: "Ignored", coordinates: { lat: 1, lng: 1 } });
   const fetcher = responses(page(records, 0, 101), page([second], 100, 101));
   const offsets: string[] = [];
-  const stats = await importCapitals(db.db, "test-key", async (input, init) => {
+  const { flagCodes, ...stats } = await importCapitals(db.db, "test-key", async (input, init) => {
     const url = new URL(String(input));
     assert.equal(url.origin + url.pathname, "https://api.restcountries.com/countries/v5");
     assert.equal(url.searchParams.get("limit"), "100");
@@ -58,6 +58,7 @@ test("imports every metadata page, maps only the first capital and sends v5 bear
     return fetcher(input, init);
   });
   assert.deepEqual(offsets, ["0", "100"]);
+  assert.equal(flagCodes.size, 101);
   assert.deepEqual(stats, { pages: 2, fetched: 101, skippedInvalid: 0, skippedExisting: 0, inserted: 101 });
   assert.deepEqual(db.queries.at(-2)?.values, ["Ottawa", 0, -180, "Canada"]);
   assert.equal(db.queries[0].sql, "BEGIN");
@@ -189,5 +190,60 @@ test("missing API key fails before any request or write", async () => {
     const db = database();
     await assert.rejects(importCapitals(db.db, key, responses()), /RESTCOUNTRIES_API_KEY is required/);
     assert.equal(db.connections(), 0);
+  }
+});
+
+test("flag metadata spans all pages, includes countries without capitals and survives DB conflicts", async () => {
+  const germany = { ...country(), codes: { alpha_2: "DE" } };
+  const czechia = { ...country("Prague", " Czechia "), codes: { alpha_2: "CZ" } };
+  const territory = { names: { common: "Antarctica" }, codes: { alpha_2: "AQ" }, capitals: [] };
+  const db = database({ rowCount: 0 });
+  const result = await importCapitals(db.db, "test", responses(
+    page([germany], 0, 3), page([czechia, territory], 1, 3),
+  ));
+  assert.equal(result.inserted, 0);
+  assert.equal(result.skippedExisting, 2);
+  assert.equal(result.skippedInvalid, 1);
+  for (const [country, code] of [[" GERMANY ", "DE"], ["czechia", "CZ"], ["Antarctica", "AQ"]]) {
+    assert.equal(countryFlagCode(result.flagCodes, country), code);
+  }
+  assert.equal(countryFlagCode(result.flagCodes, "Deutschland"), null);
+  assert.equal(countryFlagCode(result.flagCodes, "Unknown"), null);
+});
+
+test("flag metadata validates exact codes and names and permanently suppresses ambiguous names", async () => {
+  const metadata = (common: unknown, alpha_2: unknown) => ({ names: { common }, codes: { alpha_2 } });
+  const objects = [metadata(" Same ", "DE"), metadata("SAME", "CZ"), metadata("same", "DE"),
+    metadata("Repeated", "FR"), metadata("repeated", "FR"),
+    ...[undefined, null, 42, "", "de", " DE ", "DE\n", "DEU", "D1", "../de", "DÉ"].map((code, i) => metadata(`Invalid ${i}`, code)),
+    metadata(" ", "DE"), metadata(null, "DE"), metadata(12, "DE"), metadata("Bad\0name", "DE"),
+    metadata("Incomplete", "DE"), metadata("incomplete", null), metadata("incomplete", "DE"),
+    { names: { common: "No codes" } }, null];
+  const { flagCodes } = await importCapitals(database().db, "test", responses(page(objects, 0, objects.length)));
+  assert.equal(countryFlagCode(flagCodes, "same"), null);
+  assert.equal(countryFlagCode(flagCodes, "Repeated"), "FR");
+  assert.equal(countryFlagCode(flagCodes, "Incomplete"), null);
+  assert.equal([...flagCodes.values()].filter(code => code !== null).length, 1);
+  assert.equal(flagCodes.has("bad\0name"), false);
+});
+
+test("later-page, pagination, connection and transaction failures cannot publish partial flag metadata", async () => {
+  const record = { ...country(), codes: { alpha_2: "DE" } };
+  const initial = await importCapitals(database().db, "test", responses(page([record], 0, 1)));
+  let published = initial.flagCodes;
+  for (const [db, fetcher] of [
+    [database().db, responses(page([{ ...record, codes: { alpha_2: "CZ" } }], 0, 2), new Response(null, { status: 503 }))],
+    [database().db, responses({ data: { objects: [record], meta: {} } })],
+    [{ connect: async () => { throw new Error("connection failed"); } } as unknown as Pick<Pool, "connect">, responses(page([record], 0, 1))],
+    [database({ failInsert: true }).db, responses(page([record], 0, 1))],
+  ] as const) {
+    await assert.rejects(async () => { published = (await importCapitals(db, "test", fetcher)).flagCodes; }, error => {
+      assert.ok(error instanceof ImportError);
+      assert.equal("flagCodes" in error, false);
+      assert.equal("flagCodes" in error.stats, false);
+      return true;
+    });
+    assert.equal(published, initial.flagCodes);
+    assert.equal(countryFlagCode(published, "Germany"), "DE");
   }
 });

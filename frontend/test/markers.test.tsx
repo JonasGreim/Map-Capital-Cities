@@ -15,6 +15,15 @@ class Element extends EventTarget {
   style = { backgroundColor: "" };
   className = "";
   textContent = "";
+  src = "";
+  alt = "";
+  width = 0;
+  height = 0;
+  hidden = false;
+  onerror?: () => void;
+  private markup = "";
+  set innerHTML(value: string) { this.children = []; this.markup = value; }
+  get innerHTML() { return this.markup; }
   value = "";
   offsetHeight = 240;
   clientHeight = 600;
@@ -313,4 +322,35 @@ test("camera accommodates measured popup/map height and disables animation for r
   assert.ok(mobile.padding.top + mobile.padding.bottom <= 320);
   assert.ok(mobile.padding.top > normal.padding.bottom);
   assert.equal(mobile.retainPadding, false);
+});
+
+test("popup flags use validated metadata, fall back on image failure and update without losing color or focus", (t) => {
+  const { controller, markers, popups, flights } = setup(t);
+  controller.update([{ ...berlin, flagCode: "DE" }]);
+  controller.select(berlin.id, true);
+  const popup = popups[0];
+  const flag = popup.content!.children[4];
+  assert.equal(flag.attributes.get("aria-hidden"), "true");
+  const image = flag.children[0];
+  assert.equal(image.src, "https://flags.restcountries.com/v5/svg/de.svg");
+  assert.equal(image.alt, "");
+  assert.deepEqual([image.width, image.height], [40, 30]);
+  image.onerror!();
+  assert.equal(image.hidden, true);
+  assert.match(flag.innerHTML, /<svg/);
+  choose(popup, markerColors[1].value);
+  const focus = dom.activeElement;
+  controller.update([{ ...berlin, country: "Czechia", flagCode: "CZ" }]);
+  assert.equal(flag.children[0].src, "https://flags.restcountries.com/v5/svg/cz.svg");
+  assert.equal(flag.children[0].hidden, false);
+  assert.equal(dom.activeElement, focus);
+  assert.equal(flights.length, 1);
+  assert.equal(popups.length, 1);
+  assert.equal(markers.length, 1);
+  assert.equal(markers[0].options.element.style.backgroundColor, markerColors[1].value);
+  for (const code of [null, "../de", "", "DEU", undefined]) {
+    controller.update([{ ...berlin, flagCode: code }]);
+    assert.equal(flag.children.length, 0);
+    assert.match(flag.innerHTML, /<svg/);
+  }
 });

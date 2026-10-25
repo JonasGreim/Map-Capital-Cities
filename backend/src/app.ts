@@ -5,7 +5,7 @@ import { pool } from "./db.js";
 import { capitalRoutes } from "./capital-routes.js";
 import type { CapitalDatabase } from "./capitals.js";
 
-export function buildApp(database: CapitalDatabase = pool) {
+export function buildApp(database: CapitalDatabase = pool, flagCodes: ReadonlyMap<string, string | null> = new Map()) {
   const app = Fastify({ ajv: { customOptions: { coerceTypes: false, removeAdditional: false } } });
   app.register(cors, { methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"] });
 
@@ -14,7 +14,7 @@ export function buildApp(database: CapitalDatabase = pool) {
     return { ok: true };
   });
 
-  app.register(async (routes) => { capitalRoutes(routes, database); });
+  app.register(async (routes) => { capitalRoutes(routes, database, flagCodes); });
 
   return app;
 }

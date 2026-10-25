@@ -2,13 +2,15 @@ import { buildApp } from "./app.js";
 import { pool, waitForDatabase } from "./db.js";
 import { ImportError, importCapitals } from "./import-capitals.js";
 
-const app = buildApp();
+const flagCodes = new Map<string, string | null>();
+const app = buildApp(pool, flagCodes);
 app.addHook("onClose", async () => { await pool.end(); });
 
 const port = Number(process.env.PORT ?? 3001);
 try {
   await waitForDatabase(pool);
-  const stats = await importCapitals(pool, process.env.RESTCOUNTRIES_API_KEY);
+  const { flagCodes: importedCodes, ...stats } = await importCapitals(pool, process.env.RESTCOUNTRIES_API_KEY);
+  importedCodes.forEach((code, country) => flagCodes.set(country, code));
   console.log("REST Countries import complete", stats);
   await app.listen({ port, host: "0.0.0.0" });
   console.log(`API on http://localhost:${port}`);

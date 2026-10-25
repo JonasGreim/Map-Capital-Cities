@@ -3,6 +3,7 @@ import type { Capital } from "./api";
 import { useCapitalStore } from "./capital-store";
 import { CapitalForm } from "./CapitalForm";
 import { DeleteCapitalDialog } from "./DeleteCapitalDialog";
+import { CountryFlag } from "./CountryFlag";
 
 type CapitalListProps = {
   capitals: Capital[];
@@ -122,8 +123,9 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
                 <button type="button" className="capital-label" ref={selectedCapitalId === capital.id ? selectedRow : undefined}
                   aria-label={`Show ${capital.name}, ${capital.country} on map`} aria-pressed={selectedCapitalId === capital.id}
                   onClick={() => { setActionsId(null); selectCapital(capital.id); }}>
-                  <span className="capital-name">{capital.name}</span>
-                  <span className="country">{capital.country}</span>
+                  <CountryFlag code={capital.flagCode} />
+                  <span className="capital-context"><span className="capital-name">{capital.name}</span>
+                    <span className="country">{capital.country}</span></span>
                 </button>
                 <div className="row-actions" ref={actionsId === capital.id ? actionsPanel : undefined}>
                   <button ref={actionsId === capital.id ? actionsButton : undefined} id={`capital-actions-${capital.id}`} type="button" className="actions-trigger" disabled={mutating}

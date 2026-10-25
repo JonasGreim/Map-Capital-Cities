@@ -77,7 +77,7 @@ required for the static checks above.
 ## Data
 
 ```json
-{ "id": 1, "name": "string", "latitude": 0.0, "longitude": 0.0, "country": "string" }
+{ "id": 1, "name": "string", "latitude": 0.0, "longitude": 0.0, "country": "string", "flagCode": null }
 ```
 
 `db/schema.sql` creates `capitals` with an automatically generated integer ID,
@@ -180,6 +180,16 @@ is implemented.
 
 All capital objects have the shape shown in the Data section. The API uses JSON;
 POST and PUT require `Content-Type: application/json`.
+
+`flagCode` is read-only response metadata (`"DE"`, `"CZ"`, or `null`), derived from
+`names.common` and validated `codes.alpha_2` in **all pages** of the v5 startup
+import, including countries without valid capitals. The lookup stays in memory
+and is published only after a successful import transaction; no DB migration is
+needed. Names match after trimming and lowercasing, without aliases or fuzzy
+matching. Conflicting or invalid metadata and unknown names resolve to `null`.
+GET list/name and successful POST/PUT derive the code from the record's current
+country, including existing and manually created rows. POST/PUT still accept
+**only** `name`, `country`, `latitude`, and `longitude`; sending `flagCode` is rejected.
 
 | Method | Path | Success response |
 | --- | --- | --- |
@@ -379,7 +389,15 @@ Markers can overlap at world zoom levels; zoom in to distinguish nearby capitals
 or select a capital from the list or keyboard. No clustering or positional offsets
 are applied. Mapbox's globe projection can hide capitals on the far side; drag the
 map or select a list row to reach them. Map tiles require a working Mapbox token
-and network. Flags, city photos and Reset to default remain outside this phase.
+and network. City photos and Reset to default remain outside this phase.
+
+The list and selected popup show decorative 40 × 30px country flags from the
+[official flag CDN](https://restcountries.com/flags), using only validated alpha-2
+codes in `https://flags.restcountries.com/v5/svg/{lowercase-code}.svg`. Missing,
+invalid, ambiguous or unknown metadata and failed images show a neutral globe
+in the same fixed space. The browser makes no additional country API request;
+country edits replace the flag after a successful save. Metadata refreshes only
+on backend restart, and flag images require CDN access.
 
 ### Frontend verification
 
@@ -443,6 +461,13 @@ and React root without adding a production debug API. Run it separately from
 The isolated browser MCP tools configured in `.codex/config.toml` can run these
 checks locally with the root `.env`. Browser checks remain separate from CI and
 do not introduce private API keys or Mapbox credentials into GitHub Actions.
+
+`frontend/test/flags.browser.mjs` exports `verifyFlags(page, baseURL,
+screenshotDirectory?)` for a fresh isolated Playwright Page. It mocks all capital
+CRUD, loads real German/Czech CDN images and Mapbox, and checks flags, neutral
+fallbacks, a controlled image failure, country edits, manual creation/deletion,
+popup focus/Escape, colors, fixed dimensions and overflow at 1440px, 390px and
+320px. Run it with the same prerequisites as the other browser suites.
 
 ## Priorities
 

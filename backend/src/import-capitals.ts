@@ -28,6 +28,21 @@ function nonempty(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0 && !value.includes("\0");
 }
 
+const countryKey = (name: string) => name.trim().toLowerCase();
+
+export function countryFlagCode(codes: ReadonlyMap<string, string | null>, country: string): string | null {
+  return codes.get(countryKey(country)) ?? null;
+}
+
+function collectFlagCode(codes: Map<string, string | null>, record: unknown) {
+  if (!object(record) || !object(record.names) || !nonempty(record.names.common)) return;
+  const name = countryKey(record.names.common);
+  const code = object(record.codes) && typeof record.codes.alpha_2 === "string"
+    && record.codes.alpha_2.length === 2 && /^[A-Z]{2}$/.test(record.codes.alpha_2) ? record.codes.alpha_2 : null;
+  // Conflicting or malformed metadata for the same name must never pick a flag.
+  codes.set(name, codes.has(name) && codes.get(name) !== code ? null : code);
+}
+
 function capitalFrom(value: unknown): Capital | undefined {
   if (!object(value) || !object(value.names) || !nonempty(value.names.common)
     || !Array.isArray(value.capitals)) return;
@@ -44,12 +59,13 @@ export async function importCapitals(
   database: Pick<Pool, "connect">,
   apiKey: string | undefined,
   fetchPage: typeof fetch = fetch,
-): Promise<ImportStats> {
+): Promise<ImportStats & { flagCodes: ReadonlyMap<string, string | null> }> {
   const stats: ImportStats = { pages: 0, fetched: 0, skippedInvalid: 0, skippedExisting: 0, inserted: 0 };
   function fail(message: string): never { throw new ImportError(message, { ...stats }); }
   if (!apiKey?.trim()) fail("RESTCOUNTRIES_API_KEY is required; import not started");
 
   const capitals: Capital[] = [];
+  const flagCodes = new Map<string, string | null>();
   const seenPages = new Set<string>();
   let offset = 0;
   let expectedTotal: number | undefined;
@@ -111,6 +127,7 @@ export async function importCapitals(
     stats.pages++;
     stats.fetched += objects.length;
     for (const record of objects) {
+      collectFlagCode(flagCodes, record);
       const capital = capitalFrom(record);
       if (capital) capitals.push(capital);
       else stats.skippedInvalid++;
@@ -147,5 +164,6 @@ export async function importCapitals(
   }
   stats.inserted = inserted;
   stats.skippedExisting = capitals.length - inserted;
-  return stats;
+  // Metadata becomes available to the caller only after every page and COMMIT succeed.
+  return { ...stats, flagCodes };
 }

@@ -1,5 +1,6 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { capitalStore, type CapitalDatabase, type CapitalInput } from "./capitals.js";
+import { capitalStore, type Capital, type CapitalResponse, type CapitalDatabase, type CapitalInput } from "./capitals.js";
+import { countryFlagCode } from "./import-capitals.js";
 
 const text = { type: "string", minLength: 1, pattern: "\\S", not: { pattern: "\u0000" } };
 const body = {
@@ -32,8 +33,9 @@ async function requireJson(request: FastifyRequest, reply: FastifyReply) {
   }
 }
 
-export function capitalRoutes(app: FastifyInstance, database: CapitalDatabase) {
+export function capitalRoutes(app: FastifyInstance, database: CapitalDatabase, flagCodes: ReadonlyMap<string, string | null>) {
   const store = capitalStore(database);
+  const response = (capital: Capital): CapitalResponse => ({ ...capital, flagCode: countryFlagCode(flagCodes, capital.country) });
 
   // Scoped to capital routes so the existing health error contract stays intact.
   app.setErrorHandler<FastifyError>((error, _request, reply) => {
@@ -47,19 +49,19 @@ export function capitalRoutes(app: FastifyInstance, database: CapitalDatabase) {
     return reply.code(500).send({ error: "Internal server error" });
   });
 
-  app.get("/capital", async () => store.list());
+  app.get("/capital", async () => (await store.list()).map(response));
 
   app.get<{ Params: { name: string } }>("/capital/:name", {
     schema: { params: { type: "object", required: ["name"], properties: { name: text } } },
   }, async (request, reply) => {
     const capital = await store.findByName(request.params.name);
     if (!capital) return reply.code(404).send({ error: "Capital not found" });
-    return capital;
+    return response(capital);
   });
 
   app.post<{ Body: CapitalInput }>("/capital", { schema: { body }, onRequest: requireJson }, async (request, reply) => {
     const capital = await store.create(request.body);
-    return reply.code(201).send(capital);
+    return reply.code(201).send(response(capital));
   });
 
   app.put<{ Params: { id: string }; Body: CapitalInput }>("/capital/:id", {
@@ -67,7 +69,7 @@ export function capitalRoutes(app: FastifyInstance, database: CapitalDatabase) {
   }, async (request, reply) => {
     const capital = await store.update(parseId(request.params.id), request.body);
     if (!capital) return reply.code(404).send({ error: "Capital not found" });
-    return capital;
+    return response(capital);
   });
 
   app.delete<{ Params: { id: string } }>("/capital/:id", { schema: { params: idParams } }, async (request, reply) => {
