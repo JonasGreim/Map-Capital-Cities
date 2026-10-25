@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test, type TestContext } from "node:test";
 import type mapboxgl from "mapbox-gl";
-import { createCapitalMarkers, markerColors } from "../src/capital-markers";
+import { capitalCamera, createCapitalMarkers, markerColors } from "../src/capital-markers";
 
 const berlin = { id: 1, name: "Berlin", country: "Germany", latitude: 52.52, longitude: 13.405 };
 const paris = { id: 2, name: "Paris", country: "France", latitude: 48.85, longitude: 2.35 };
@@ -16,6 +16,9 @@ class Element extends EventTarget {
   className = "";
   textContent = "";
   value = "";
+  offsetHeight = 240;
+  clientHeight = 600;
+  getBoundingClientRect() { return { top: 0, left: 0, right: 600, bottom: 600 }; }
   type = "";
   isConnected = true;
   focusCount = 0;
@@ -29,6 +32,10 @@ class Element extends EventTarget {
 const dom = { createElement: (tag: string) => new Element(tag), activeElement: null as Element | null, body: new Element("body") };
 
 function setup(t: TestContext) {
+  dom.activeElement = dom.body;
+  const selections: (number | null)[] = [];
+  const flights: unknown[] = [];
+  let stops = 0;
   const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
   Object.defineProperty(globalThis, "document", { configurable: true, value: dom });
   const markers: Marker[] = [];
@@ -65,20 +72,21 @@ function setup(t: TestContext) {
     }
   }
   const canvas = new Element("canvas");
-  const controller = createCapitalMarkers({ getCanvas: () => canvas } as unknown as mapboxgl.Map, { Marker, Popup } as unknown as typeof mapboxgl);
+  const controller = createCapitalMarkers({ getCanvas: () => canvas, getContainer: () => canvas,
+    getZoom: () => 2, stop: () => { stops += 1; }, flyTo: (options: unknown) => flights.push(options),
+  } as unknown as mapboxgl.Map, { Marker, Popup } as unknown as typeof mapboxgl, id => selections.push(id));
   t.after(() => {
     controller.destroy();
     if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
     else Reflect.deleteProperty(globalThis, "document");
   });
-  return { controller, markers, popups, canvas };
+  return { controller, markers, popups, canvas, selections, flights, stops: () => stops };
 }
 
 function choose(popup: { content?: Element }, value: string) {
-  const select = popup.content!.children[2].children[0];
-  select.value = value;
-  select.dispatchEvent(new Event("change"));
-  return select;
+  const button = popup.content!.children[3].children[1].children[markerColors.findIndex(color => color.value === value)];
+  button.click();
+  return button;
 }
 
 test("every valid capital gets a square marker at [longitude, latitude], including nearby capitals", (t) => {
@@ -106,8 +114,8 @@ test("activation opens a labeled popup with safe text and an accessible current-
   assert.equal(popups.length, 1);
   assert.equal(popups[0].content!.children[0].textContent, "<img onerror=alert(1)>");
   assert.equal(popups[0].content!.children[1].textContent, "Germany");
-  assert.equal(popups[0].content!.children[2].textContent, "Marker color");
-  assert.equal(dom.activeElement!.value, markerColors[0].value);
+  assert.equal(popups[0].content!.children[3].children[0].textContent, "Marker color");
+  assert.equal(dom.activeElement!.attributes.get("aria-label"), "Teal marker");
   assert.equal(button.attributes.get("aria-expanded"), "true");
 });
 
@@ -122,7 +130,7 @@ test("color changes are isolated and survive popup reopen and data rerenders/rel
   assert.equal(dom.activeElement, markers[0].options.element);
   controller.update([{ ...paris }, { ...berlin }]);
   markers[0].options.element.click();
-  assert.equal(dom.activeElement!.value, markerColors[1].value);
+  assert.equal(dom.activeElement!.attributes.get("aria-label"), "Red marker");
   assert.equal(markers.length, 2);
 });
 
@@ -159,7 +167,7 @@ test("removing an active capital moves popup focus to the canvas without focusin
   controller.update([berlin, paris]);
   const button = markers[0].options.element;
   button.click();
-  const select = choose(popups[0], markerColors[1].value);
+  const swatch = choose(popups[0], markerColors[1].value);
   controller.update([paris]);
   assert.equal(button.focusCount, 0);
   assert.equal(dom.activeElement, canvas);
@@ -169,8 +177,7 @@ test("removing an active capital moves popup focus to the canvas without focusin
   assert.equal(popups[0].removed, true);
   assert.equal(popups[0].closeListeners.size, 0);
   assert.equal(button.attributes.get("aria-expanded"), "false");
-  select.value = markerColors[2].value;
-  select.dispatchEvent(new Event("change"));
+  swatch.click();
   assert.equal(button.style.backgroundColor, markerColors[1].value);
   button.click();
   assert.equal(popups.length, 1);
@@ -218,7 +225,7 @@ test("removed capitals release markers, popups, listeners and colors; new capita
   const { controller, markers, popups } = setup(t);
   controller.update([berlin, paris]);
   markers[0].options.element.click();
-  const select = choose(popups[0], markerColors[1].value);
+  const swatch = choose(popups[0], markerColors[1].value);
   controller.update([paris]);
   assert.equal(markers[0].removed, true);
   assert.equal(markers[1].removed, false);
@@ -228,7 +235,7 @@ test("removed capitals release markers, popups, listeners and colors; new capita
   assert.equal(popups.length, 1);
   choose({ content: popups[0].content }, markerColors[2].value);
   assert.equal(markers[0].options.element.style.backgroundColor, markerColors[1].value);
-  assert.notEqual(dom.activeElement, select);
+  assert.notEqual(dom.activeElement, swatch);
   controller.update([berlin, paris]);
   assert.equal(markers.length, 3);
   assert.equal(markers[2].options.element.style.backgroundColor, markerColors[0].value);
@@ -245,4 +252,65 @@ test("destroy releases every marker and active popup and tolerates repeated clea
   assert.equal(popups[0].closeListeners.size, 0);
   markers[0].options.element.click();
   assert.equal(popups.length, 1);
+});
+
+test("list selection navigates to the matching capital, reuses its popup and interrupts an earlier flight", (t) => {
+  const { controller, markers, popups, flights, stops, selections } = setup(t);
+  controller.update([berlin, paris]);
+  controller.select(paris.id, true);
+  assert.equal(popups[0].content!.children[0].textContent, "Paris");
+  assert.deepEqual((flights[0] as { center: number[] }).center, [2.35, 48.85]);
+  controller.select(paris.id, true);
+  assert.equal(popups.length, 1);
+  controller.select(berlin.id, true);
+  assert.equal(popups[0].removed, true);
+  assert.equal(popups[1].content!.children[0].textContent, "Berlin");
+  assert.equal(markers.length, 2);
+  assert.equal(stops(), 3);
+  assert.equal(markers[0].options.element.attributes.get("aria-pressed"), "true");
+  assert.equal(markers[1].options.element.attributes.get("aria-pressed"), "false");
+  assert.deepEqual(selections, []); // Programmatic selection never loops back into the store.
+  controller.select(null);
+  assert.equal(popups[1].removed, true);
+});
+
+test("marker selection and closure notify the shared selection, without a stale clear when switching", (t) => {
+  const { controller, markers, popups, selections } = setup(t);
+  controller.update([berlin, paris]);
+  markers[0].options.element.click();
+  markers[1].options.element.click();
+  assert.deepEqual(selections, [1, 2]);
+  popups[1].remove();
+  assert.deepEqual(selections, [1, 2, null]);
+  markers[0].options.element.click();
+  controller.update([paris]);
+  assert.deepEqual(selections, [1, 2, null, 1, null]);
+});
+
+test("only a selected coordinate edit navigates; text/reloads preserve camera, popup, marker and color", (t) => {
+  const { controller, markers, popups, flights } = setup(t);
+  controller.update([berlin, paris]);
+  controller.select(berlin.id, true);
+  choose(popups[0], markerColors[2].value);
+  controller.update([{ ...berlin, name: "New Berlin" }, { ...paris, latitude: 40 }]);
+  assert.equal(flights.length, 1);
+  controller.update([{ ...berlin, name: "New Berlin", latitude: 20, longitude: 10 }, paris]);
+  assert.equal(flights.length, 2);
+  assert.equal(popups[0].content!.children[2].textContent, "20.0000, 10.0000");
+  assert.equal(popups[0].content!.children[2].attributes.get("aria-label"), "Latitude 20, longitude 10");
+  assert.equal(markers[0].options.element.style.backgroundColor, markerColors[2].value);
+  assert.equal(markers.length, 2);
+  assert.equal(popups.length, 1);
+});
+
+test("camera accommodates measured popup/map height and disables animation for reduced motion", () => {
+  const normal = capitalCamera(berlin, 800, 210, false);
+  const mobile = capitalCamera(berlin, 320, 210, true);
+  assert.deepEqual(normal.center, [13.405, 52.52]);
+  assert.equal(normal.zoom, 4.5);
+  assert.equal(normal.duration, 900);
+  assert.equal(mobile.duration, 0);
+  assert.ok(mobile.padding.top + mobile.padding.bottom <= 320);
+  assert.ok(mobile.padding.top > normal.padding.bottom);
+  assert.equal(mobile.retainPadding, false);
 });

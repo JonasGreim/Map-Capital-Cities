@@ -6,6 +6,10 @@ type CapitalState = {
   loading: boolean;
   error: string | null;
   mutating: boolean;
+  selectedCapitalId: number | null;
+  selectionSource: "list" | "map";
+  selectionVersion: number;
+  selectCapital: (id: number | null, source?: "list" | "map") => void;
   fetchCapitals: () => Promise<void>;
   saveCapital: (input: CapitalInput, id?: number) => Promise<void>;
   removeCapital: (id: number) => Promise<void>;
@@ -26,7 +30,7 @@ export const useCapitalStore = create<CapitalState>((set, get) => {
         const capitals = state.capitals.filter((capital) => capital.id !== (saved ? saved.id : id));
         if (saved) capitals.push(saved);
         capitals.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()) || a.id - b.id);
-        return { capitals, error: null };
+        return { capitals, error: null, selectedCapitalId: capitals.some((capital) => capital.id === state.selectedCapitalId) ? state.selectedCapitalId : null };
       });
     } finally { set({ mutating: false }); }
   }
@@ -35,6 +39,13 @@ export const useCapitalStore = create<CapitalState>((set, get) => {
     loading: false,
     error: null,
     mutating: false,
+    selectedCapitalId: null,
+    selectionSource: "list",
+    selectionVersion: 0,
+    selectCapital: (id, source = "list") => {
+      if (id !== null && !get().capitals.some((capital) => capital.id === id)) return;
+      set((state) => ({ selectedCapitalId: id, selectionSource: source, selectionVersion: state.selectionVersion + 1 }));
+    },
     saveCapital: (input, id) => mutate(() => id === undefined ? createCapital(input) : updateCapital(id, input)),
     removeCapital: (id) => mutate(() => deleteCapital(id), id),
     fetchCapitals: () => {
@@ -42,7 +53,8 @@ export const useCapitalStore = create<CapitalState>((set, get) => {
       if (get().mutating) return Promise.resolve();
       set({ loading: true, error: null });
       pendingRequest = getCapitals()
-        .then((capitals) => { set({ capitals, loading: false }); })
+        .then((capitals) => { set((state) => ({ capitals, loading: false,
+          selectedCapitalId: capitals.some((capital) => capital.id === state.selectedCapitalId) ? state.selectedCapitalId : null })); })
         .catch((error: unknown) => {
           set({ loading: false, error: error instanceof Error ? error.message : "Unable to load capitals. Please try again." });
         })

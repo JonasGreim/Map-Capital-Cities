@@ -16,75 +16,134 @@ type Entry = {
   popup?: mapboxgl.Popup;
   heading?: HTMLHeadingElement;
   country?: HTMLParagraphElement;
-  disposePopup?: (returnFocus?: boolean) => void;
+  coordinates?: HTMLParagraphElement;
+  focusColor?: () => void;
+  content?: HTMLDivElement;
+  disposePopup?: (returnFocus?: boolean, notify?: boolean) => void;
   open: (event: Event) => void;
 };
 
+// The sidebar occupies its own grid cell. Measure only the actual map and popup
+// to reserve room above the square, including on the stacked mobile layout.
+export function capitalCamera(capital: Capital, height: number, popupHeight: number, reducedMotion: boolean, zoom = 4.5) {
+  const edge = 32;
+  return { center: [capital.longitude, capital.latitude] as [number, number], zoom,
+    padding: { top: Math.min(popupHeight + edge * 3, Math.max(edge, height - edge)), bottom: edge / 2, left: edge, right: edge },
+    retainPadding: false, duration: reducedMotion ? 0 : 900 };
+}
+
+const coordinates = (capital: Capital) => `${capital.latitude.toFixed(4)}, ${capital.longitude.toFixed(4)}`;
+
 // Each ID owns its marker and in-memory color for as long as it is in the data.
-export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl) {
+export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelectionChange: (id: number | null, closedId?: number) => void = () => {}) {
   const entries = new globalThis.Map<number, Entry>();
   let active: Entry | undefined;
 
-  function close(entry: Entry) {
-    entry.disposePopup?.();
+  function navigate(entry: Entry, zoom?: number) {
+    map.stop();
+    const height = map.getContainer().clientHeight;
+    const popupHeight = entry.popup?.getElement()?.offsetHeight ?? 0;
+    map.flyTo(capitalCamera(entry.capital, height, popupHeight, globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false, zoom));
+  }
+
+  function fitPopup(entry: Entry) {
+    const container = map.getContainer();
+    if (entry.content) entry.content.style.maxHeight = `${Math.max(160, container.clientHeight - 112)}px`;
+    const bounds = entry.popup?.getElement()?.getBoundingClientRect();
+    const viewport = container.getBoundingClientRect();
+    if (bounds && (bounds.top < viewport.top + 64 || bounds.left < viewport.left
+      || bounds.right > viewport.right || bounds.bottom > viewport.bottom)) navigate(entry, map.getZoom());
   }
 
   function open(entry: Entry) {
     if (entry.popup) return;
-    if (active) close(active);
+    active?.disposePopup?.(false, false);
     const content = document.createElement("div");
     content.className = "capital-popup";
+    content.style.maxHeight = `${Math.max(160, map.getContainer().clientHeight - 112)}px`;
     const heading = document.createElement("h2");
     heading.textContent = entry.capital.name;
     const country = document.createElement("p");
+    country.className = "popup-country";
     country.textContent = entry.capital.country;
-    const label = document.createElement("label");
+    const location = document.createElement("p");
+    location.className = "popup-coordinates";
+    location.setAttribute("aria-label", `Latitude ${entry.capital.latitude}, longitude ${entry.capital.longitude}`);
+    location.textContent = coordinates(entry.capital);
+    const colors = document.createElement("div");
+    colors.className = "popup-colors";
+    colors.setAttribute("role", "group");
+    colors.setAttribute("aria-label", "Marker color");
+    const label = document.createElement("p");
     label.textContent = "Marker color";
-    const select = document.createElement("select");
-    for (const color of markerColors) {
-      const option = document.createElement("option");
-      option.value = color.value;
-      option.textContent = color.name;
-      select.append(option);
-    }
-    select.value = entry.color;
-    label.append(select);
-    content.append(heading, country, label);
-    const popup = new api.Popup({ offset: 20, maxWidth: "260px", focusAfterOpen: false })
+    const swatches = document.createElement("div");
+    swatches.className = "color-swatches";
+    const listeners: (() => void)[] = [];
+    const buttons = markerColors.map((color) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "color-swatch";
+      button.style.backgroundColor = color.value;
+      button.setAttribute("aria-label", `${color.name} marker`);
+      button.setAttribute("title", color.name);
+      button.setAttribute("aria-pressed", String(entry.color === color.value));
+      const choose = () => {
+        entry.color = color.value;
+        entry.button.style.backgroundColor = entry.color;
+        buttons.forEach((swatch, index) => {
+          const selected = markerColors[index].value === entry.color;
+          swatch.setAttribute("aria-pressed", String(selected));
+          swatch.textContent = selected ? "✓" : "";
+        });
+      };
+      button.textContent = entry.color === color.value ? "✓" : "";
+      button.addEventListener("click", choose);
+      listeners.push(() => button.removeEventListener("click", choose));
+      swatches.append(button);
+      return button;
+    });
+    colors.append(label, swatches);
+    content.append(heading, country, location, colors);
+    const popup = new api.Popup({ offset: 24, anchor: "bottom", maxWidth: "248px", focusAfterOpen: false })
       .setLngLat([entry.capital.longitude, entry.capital.latitude])
       .setDOMContent(content);
-    const change = () => {
-      if (!markerColors.some((color) => color.value === select.value)) return;
-      entry.color = select.value;
-      entry.button.style.backgroundColor = entry.color;
-    };
     const escape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      event.preventDefault();
       event.stopPropagation();
       popup.remove();
     };
     let returnFocus = true;
+    let notify = true;
     const onClose = () => {
-      // Mapbox detaches the dialog before emitting close, which can move focus
-      // to body. Respect focus already moved to another control or the canvas.
+      // Mapbox detaches the dialog before emitting close, moving focus to body.
+      // Respect focus already moved to another control, a dialog or the canvas.
       const restoreFocus = dialog?.contains(document.activeElement) || document.activeElement === document.body;
-      select.removeEventListener("change", change);
+      listeners.forEach((dispose) => dispose());
       dialog?.removeEventListener("keydown", escape);
       popup.off("close", onClose);
       entry.popup = undefined;
       entry.heading = undefined;
       entry.country = undefined;
+      entry.coordinates = undefined;
+      entry.focusColor = undefined;
+      entry.content = undefined;
       entry.disposePopup = undefined;
       entry.button.setAttribute("aria-expanded", "false");
-      if (active === entry) active = undefined;
+      entry.button.setAttribute("aria-pressed", "false");
+      if (active === entry) {
+        active = undefined;
+        if (notify) onSelectionChange(null, entry.capital.id);
+      }
       if (returnFocus && restoreFocus && entry.button.isConnected) entry.button.focus({ preventScroll: true });
     };
-    select.addEventListener("change", change);
     popup.on("close", onClose);
     entry.popup = popup;
     entry.heading = heading;
     entry.country = country;
-    entry.disposePopup = (restoreFocus = true) => { returnFocus = restoreFocus; popup.remove(); };
+    entry.coordinates = location;
+    entry.content = content;
+    entry.disposePopup = (restoreFocus = true, notifySelection = true) => { returnFocus = restoreFocus; notify = notifySelection; popup.remove(); };
     active = entry;
     popup.addTo(map);
     const dialog = popup.getElement();
@@ -92,19 +151,31 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl) {
     dialog?.setAttribute("aria-label", `${entry.capital.name}, ${entry.capital.country}: marker color`);
     dialog?.addEventListener("keydown", escape);
     entry.button.setAttribute("aria-expanded", "true");
-    select.focus({ preventScroll: true });
+    entry.button.setAttribute("aria-pressed", "true");
+    entry.focusColor = () => buttons[markerColors.findIndex((color) => color.value === entry.color)].focus({ preventScroll: true });
+    entry.focusColor();
   }
 
   function remove(entry: Entry, focusCanvas = true) {
-    // Check before Mapbox detaches the popup and moves its focus to body.
     const focusInsidePopup = entry.popup?.getElement()?.contains(document.activeElement);
-    entry.disposePopup?.(false);
+    entry.disposePopup?.(false, false);
     entry.button.removeEventListener("click", entry.open);
     entry.marker.remove();
     if (focusCanvas && focusInsidePopup) map.getCanvas().focus({ preventScroll: true });
   }
 
   return {
+    select(id: number | null, fromList = false) {
+      if (id === null) { active?.disposePopup?.(false, false); return; }
+      const entry = entries.get(id);
+      if (!entry) return;
+      open(entry);
+      if (fromList) {
+        navigate(entry);
+        // Repeated list activation still transfers focus into the existing popup.
+        entry.focusColor?.();
+      }
+    },
     update(capitals: Capital[]) {
       const valid = capitals.filter((capital) => Number.isFinite(capital.latitude)
         && Math.abs(capital.latitude) <= 90 && Number.isFinite(capital.longitude)
@@ -112,8 +183,10 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl) {
       const ids = new Set(valid.map((capital) => capital.id));
       for (const [id, entry] of entries) {
         if (ids.has(id)) continue;
+        const selected = active === entry;
         remove(entry);
         entries.delete(id);
+        if (selected) onSelectionChange(null, entry.capital.id);
       }
       for (const capital of valid) {
         let entry = entries.get(capital.id);
@@ -121,8 +194,10 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl) {
           const button = document.createElement("button");
           button.type = "button";
           button.className = "capital-marker";
+          button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>';
           button.setAttribute("aria-haspopup", "dialog");
           button.setAttribute("aria-expanded", "false");
+          button.setAttribute("aria-pressed", "false");
           button.style.backgroundColor = markerColors[0].value;
           const marker = new api.Marker({ element: button, anchor: "center" })
             .setLngLat([capital.longitude, capital.latitude]).addTo(map);
@@ -131,15 +206,18 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl) {
           const created: Entry = {
             capital, marker, button, color: markerColors[0].value,
             open: (event) => {
-              // Do not let the opening click reach Mapbox's close-on-map-click listener.
               event.stopPropagation();
               open(created);
+              onSelectionChange(created.capital.id);
+              // Keep edge popups in the map without changing the user's zoom.
+              fitPopup(created);
             },
           };
           button.addEventListener("click", created.open);
           entries.set(capital.id, created);
           entry = created;
         }
+        const moved = entry.capital.latitude !== capital.latitude || entry.capital.longitude !== capital.longitude;
         entry.capital = capital;
         entry.button.setAttribute("aria-label", `${capital.name}, ${capital.country}: change marker color`);
         entry.marker.setLngLat([capital.longitude, capital.latitude]);
@@ -147,8 +225,14 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl) {
         entry.popup?.getElement()?.setAttribute("aria-label", `${capital.name}, ${capital.country}: marker color`);
         if (entry.heading) entry.heading.textContent = capital.name;
         if (entry.country) entry.country.textContent = capital.country;
+        if (entry.coordinates) {
+          entry.coordinates.textContent = coordinates(capital);
+          entry.coordinates.setAttribute("aria-label", `Latitude ${capital.latitude}, longitude ${capital.longitude}`);
+        }
+        if (active === entry && moved) navigate(entry);
       }
     },
+    resize() { if (active) fitPopup(active); },
     destroy() {
       for (const entry of entries.values()) remove(entry, false);
       entries.clear();

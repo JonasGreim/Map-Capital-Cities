@@ -135,10 +135,10 @@ export async function verifySidebar(page, baseURL) {
   await page.getByText("Saving capital…", { exact: true }).waitFor();
   assert.equal(await button("Cancel").isDisabled(), true);
   await page.keyboard.press("Escape");
-  assert.equal(await page.getByRole("dialog").isVisible(), true);
+  assert.equal(await page.locator("dialog.capital-dialog").isVisible(), true);
   releaseWrite();
   writeMode = "success";
-  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
   await focused(button("Add capital"));
   assert.equal(await page.locator(".capital-marker").count(), 24);
   await search.fill("Test City");
@@ -151,7 +151,7 @@ export async function verifySidebar(page, baseURL) {
   assert.equal(await page.getByLabel("Capital name", { exact: true }).inputValue(), "Renamed City");
   writeMode = "success";
   await button("Save changes").click();
-  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
   await focused(button("Add capital")); // edited record no longer matches search
   await search.fill("Renamed City");
   await button("Actions for Renamed City").click();
@@ -161,7 +161,7 @@ export async function verifySidebar(page, baseURL) {
   await button("Actions for Renamed City").click();
   await button("Delete").click();
   await button("Delete capital").click();
-  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
   await focused(button("Add capital"));
   assert.deepEqual(writes, ["POST", "PUT", "PUT", "DELETE"]);
   assert.equal(await page.locator(".capital-marker").count(), 23);
