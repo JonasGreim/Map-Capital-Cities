@@ -303,7 +303,10 @@ Search countries or capitals using the labeled search field. Matching ignores ca
 and surrounding whitespace and filters only the list; all map markers remain.
 The count beside the heading is the full dataset total, while search reports the
 matching count out of that total, including a clear no-matches message.
-The **Skip to map** link becomes visible on keyboard focus.
+The explicit **Clear search** (×) button appears for any nonempty query, clears
+only that text and returns focus to the search field. The continent filter,
+selection, markers and camera stay unchanged. The **Skip to map** link becomes
+visible on keyboard focus.
 
 During a request it announces “Loading capitals…”. An empty array shows “No capitals
 available yet.” Errors show a readable message and a keyboard-accessible “Try
@@ -344,7 +347,16 @@ sessions are synchronized only when refreshed. Dialogs support keyboard operatio
 restore focus to the initiating control, and fall back to Add capital after deletion
 or when an edited entry no longer matches the search. Actions panels open with
 Enter or Space; Tab moves through Edit and Delete, Escape closes and restores
-focus to the three-dot button, and leaving the row or clicking outside closes them.
+focus to the three-dot button, and leaving the actions or clicking outside closes them.
+The compact panel uses a measured portal outside the scroll region, with viewport
+clamping; opening never changes row heights or scroll position. Scrolling, resize,
+filter changes and collapse close the panel.
+
+Confirmed create, update, delete and reset results appear as a small polite status
+at the upper-right edge for about four seconds, without shifting list content or
+taking focus. Starting another operation clears the previous notice; a new success
+starts a fresh timer, which is also cleaned up on unmount. Errors remain visible
+in the existing dialog/retry flow until handled.
 
 **Persistence limitation:** CRUD writes are stored in PostgreSQL, but REST Countries
 is reimported on **every backend startup**. Deleted imported capitals can reappear
@@ -446,8 +458,10 @@ Each valid capital in the shared store has a square **32 × 32 CSS pixel** marke
 with a location glyph at its longitude/latitude. Click a marker, or focus it with
 Tab and press Enter or Space, to open its popup and select the matching list row.
 Selection is indicated by the highlighted row, marker outline and pressed button
-state. Marker activation reveals a matching row inside the list scroller without
-moving page focus, opening a closed sidebar or changing the search query.
+state. Marker activation centers a matching row inside the list scroller, clamped
+at the beginning/end, without moving the page or popup focus, opening a closed
+sidebar or changing the search query. Repeated activation reveals it again;
+unrelated data updates do not recenter the list.
 
 Popups show the capital, country, latitude and longitude. Choose one of the named
 Teal, Red, Purple or Gold swatch buttons in the “Marker color” group to update only
@@ -588,10 +602,17 @@ filter, stable camera/canvas, 32×32 markers and overflow at 1440×900, 390×844
 320×568. It is included in `frontend/test/run-browser.mjs`; every capital API
 request is mocked while Mapbox runs in a fresh Chromium context.
 
+`frontend/test/sidebar-polish.browser.mjs` adds geometry checks for anchored menus
+at list edges and long names, native keyboard/focus transitions, marker-selected
+centering and clamping, independent search clear, four-second success timing,
+timer restart/unmount cleanup and persistent failures. It runs at 1440×900,
+390×844 and 320×568 through the same runner. Set `BROWSER_SCREENSHOT_DIR` to an
+existing directory outside the repository to capture this suite's screenshots.
+
 ### Browser runner and CI prerequisite
 
 `frontend/test/run-browser.mjs` starts only Vite, awaits server readiness and runs
-the flag, selection, sidebar, reset and continent suites in fresh Chromium
+the flag, selection, sidebar, reset, continent and sidebar-polish suites in fresh Chromium
 contexts. Every capital read/write is mocked; no backend or database is started.
 It fails on missing
 Mapbox configuration or test errors and closes the browser/server on exit.
