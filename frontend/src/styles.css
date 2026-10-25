@@ -119,6 +119,10 @@ button:disabled { opacity: 0.65; cursor: wait; }
 .coordinate-preview { width: 22px; height: 22px; border: 5px solid #fff; border-radius: 50%; background: #007e9e; box-shadow: 0 2px 8px #12334b99, 0 0 0 2px #007e9e; pointer-events: none; }
 .map-panel { min-width: 0; min-height: 0; position: relative; background: #e6edf0; }
 .map { width: 100%; height: 100%; }
+/* Match the attribution wrapper to its touch target. The global button minimum
+   otherwise leaves part of Mapbox's 24px compact wrapper outside the map. */
+.mapboxgl-ctrl-attrib.mapboxgl-compact { min-height: 40px; padding-right: 44px; }
+.mapboxgl-ctrl-attrib-button { width: 44px; height: 44px; min-height: 44px; padding: 0; background-size: 24px; background-position: center; background-repeat: no-repeat; }
 .map-unavailable { display: grid; align-content: center; padding: 2rem; color: #526774; text-align: center; }
 .map-error { position: absolute; z-index: 1; bottom: 2rem; left: 1rem; right: 1rem; padding: 0.75rem; border: 1px solid #cbdce5; border-radius: 0.4rem; background: #fff; color: #426079; font-size: 0.85rem; }
 .capital-marker {
@@ -137,11 +141,11 @@ button:disabled { opacity: 0.65; cursor: wait; }
 .capital-marker[aria-pressed="true"] { z-index: 1; box-shadow: 0 3px 9px #12334b66, 0 0 0 3px #12334b; }
 .capital-marker:focus-visible { z-index: 2; outline: 3px solid #bc5e12; outline-offset: 4px; }
 .mapboxgl-popup-content { padding: 0; border: 1px solid #dbe3e7; border-radius: 0.65rem; box-shadow: 0 5px 20px #12334b33; }
-.capital-popup { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 0.85rem; padding: 1rem; color: #172c36; font: 0.9rem/1.5 system-ui, sans-serif; overflow-wrap: anywhere; overflow-y: auto; width: 286px; }
-.capital-popup h2 { grid-column: 2; margin-right: 5.25rem; color: #12334b; font-size: 1.1rem; line-height: 1.3; }
-.popup-actions-trigger { position: absolute; top: 0.5rem; right: 3.5rem; width: 2.5rem; min-height: 2.5rem; border-radius: 0.4rem; }
+.capital-popup { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: min(0.85rem, 14px); padding: min(1rem, 16px); color: #172c36; font: 0.9rem/1.5 system-ui, sans-serif; overflow-wrap: anywhere; overflow-y: auto; width: 286px; }
+.capital-popup h2 { grid-column: 2; margin-right: 84px; color: #12334b; font-size: 1.1rem; line-height: 1.3; }
+.popup-actions-trigger { position: absolute; top: 8px; right: 56px; width: 40px; min-height: 40px; border-radius: 0.4rem; }
 .capital-popup > .country-flag { grid-column: 1; grid-row: 1 / span 2; align-self: center; }
-.popup-country { grid-column: 2; margin: 0.125rem 5.25rem 0 0; color: #426079; font-size: 0.85rem; line-height: 1.4; }
+.popup-country { grid-column: 2; margin: 0.125rem 84px 0 0; color: #426079; font-size: 0.85rem; line-height: 1.4; }
 .popup-coordinates, .popup-colors { grid-column: 1 / -1; }
 .popup-coordinates { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.8rem; color: #426079; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
 .popup-icon { display: inline-flex; flex: 0 0 16px; width: 16px; height: 16px; color: #087d96; }
@@ -156,7 +160,7 @@ button:disabled { opacity: 0.65; cursor: wait; }
 .color-swatch { width: 40px; min-height: 40px; padding: 0; border: 4px solid #fff; border-radius: 50%; color: #fff; box-shadow: 0 0 0 1px #cbdce5; font-size: 1rem; }
 .color-swatch:hover { box-shadow: 0 0 0 2px #426079; }
 .color-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #12334b; }
-.mapboxgl-popup-close-button { top: 0.5rem; right: 0.5rem; display: grid; place-items: center; min-height: 2.5rem; width: 2.5rem; padding: 0; border: 0; border-radius: 0.6rem; background: #fff; color: #426079; font-size: 1.5rem; }
+.mapboxgl-popup-close-button { top: 8px; right: 8px; display: grid; place-items: center; min-height: 40px; width: 40px; padding: 0; border: 0; border-radius: 0.6rem; background: #fff; color: #426079; font-size: 24px; }
 .mapboxgl-popup-close-button:hover { background: #eaf1f3; }
 
 /* hidden preserves the mounted React/Mapbox/marker instances. */
@@ -164,7 +168,7 @@ button:disabled { opacity: 0.65; cursor: wait; }
 .mobile-navigation { display: none; }
 
 @media (max-width: 700px) {
-  :root { --bottom-navigation-height: 64px; }
+  :root { --bottom-navigation-height: max(64px, 4rem); }
   .app { height: 100dvh; padding-bottom: calc(var(--bottom-navigation-height) + env(safe-area-inset-bottom, 0px)); }
   .mobile-navigation { display: block; position: fixed; z-index: 3; bottom: 0; left: 0; right: 0; height: calc(var(--bottom-navigation-height) + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); border-top: 1px solid #dbe3e7; background: #fbfdfe; }
   .mobile-navigation [role="tablist"] { display: flex; height: 100%; }
@@ -175,7 +179,9 @@ button:disabled { opacity: 0.65; cursor: wait; }
   .sidebar-toggle, .skip-to-map { display: none; }
   .coordinate-pick-banner { top: 0.75rem; }
 
-  .app-header { gap: 0.75rem; padding: 1rem; }
+  /* Large text must leave usable space for the active view. The brand remains
+     reachable in its own scroll area when its full text exceeds this budget. */
+  .app-header { gap: 0.75rem; padding: 1rem; max-height: 35%; overflow-y: auto; align-items: safe center; }
   .app-header h1 { font-size: 1.3rem; }
   .app-header p { font-size: 0.8rem; }
   .brand-globe { flex-basis: 2.5rem; width: 2.5rem; height: 2.5rem; }
@@ -195,4 +201,18 @@ button:disabled { opacity: 0.65; cursor: wait; }
   .app-header { padding-block: 0.4rem; }
   .app-header p { display: none; }
   .list-heading { padding-block: 0.4rem; }
+}
+
+/* Preserve the popup layout and controls; spend less space on gaps when the
+   map is short. Long content still uses the existing internal scroller. */
+@media (max-height: 500px) {
+  .capital-popup { padding: 0.25rem; column-gap: 0.5rem; }
+  .capital-popup h2 { font-size: 1rem; line-height: 1.2; }
+  .popup-country { font-size: 0.75rem; line-height: 1.2; }
+  .popup-coordinates { margin-top: 0.25rem; font-size: 0.75rem; line-height: 1.3; }
+  .popup-facts { gap: 0 0.5rem; margin-top: 0.25rem; padding-top: 0.25rem; font-size: 0.75rem; line-height: 1.25; }
+  .popup-colors { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; margin-top: 0.25rem; padding-top: 0.25rem; }
+  .popup-colors > p { line-height: 1.3; }
+  .color-swatches { margin-top: 0; }
+  .popup-actions-trigger, .mapboxgl-popup-close-button { top: 0.25rem; }
 }

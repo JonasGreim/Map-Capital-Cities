@@ -103,9 +103,16 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
     map.flyTo(capitalCamera(entry.capital, height, popupHeight, globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false, zoom));
   }
 
+  function popupMaxHeight() {
+    const height = map.getContainer().clientHeight;
+    // Keep the normal camera clearance (including globe projection), but give
+    // short maps more reading space. Never force content taller than the map.
+    return `${Math.max(0, height - (height < 300 ? 80 : 112))}px`;
+  }
+
   function fitPopup(entry: Entry) {
     const container = map.getContainer();
-    if (entry.content) entry.content.style.maxHeight = `${Math.max(160, container.clientHeight - 112)}px`;
+    if (entry.content) entry.content.style.maxHeight = popupMaxHeight();
     const bounds = entry.popup?.getElement()?.getBoundingClientRect();
     const viewport = container.getBoundingClientRect();
     if (bounds && (bounds.top < viewport.top || bounds.left < viewport.left
@@ -117,7 +124,7 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
     active?.disposePopup?.(false, false);
     const content = document.createElement("div");
     content.className = "capital-popup";
-    content.style.maxHeight = `${Math.max(160, map.getContainer().clientHeight - 112)}px`;
+    content.style.maxHeight = popupMaxHeight();
     const heading = document.createElement("h2");
     heading.textContent = entry.capital.name;
     const country = document.createElement("p");
@@ -231,7 +238,16 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
     dialog?.addEventListener("keydown", escape);
     entry.button.setAttribute("aria-expanded", "true");
     entry.button.setAttribute("aria-pressed", "true");
-    entry.focusColor = () => buttons[markerColors.findIndex((color) => color.value === entry.color)].focus({ preventScroll: true });
+    entry.focusColor = () => {
+      const button = buttons[markerColors.findIndex((color) => color.value === entry.color)];
+      button.focus({ preventScroll: true });
+      // Reveal keyboard focus inside this scroller only, without panning the
+      // map or scrolling the document for long names and short viewports.
+      if (button.offsetTop < content.scrollTop + 4) content.scrollTop = button.offsetTop - 4;
+      else if (button.offsetTop + button.offsetHeight > content.scrollTop + content.clientHeight - 4) {
+        content.scrollTop = button.offsetTop + button.offsetHeight - content.clientHeight + 4;
+      }
+    };
     entry.focusColor();
   }
 
