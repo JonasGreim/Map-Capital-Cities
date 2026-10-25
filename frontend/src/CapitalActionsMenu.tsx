@@ -1,12 +1,13 @@
 import { useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
-// This one menu lives outside the scrolling list so neither edge can clip it.
-export function CapitalActionsMenu({ id, name, trigger, hidden, onClose, onEdit, onDelete }: {
+// Shared by list rows and the active popup; the portal avoids clipping at edges.
+export function CapitalActionsMenu({ id, name, trigger, hidden, placement = "beside", onClose, onEdit, onDelete }: {
   id: number;
   name: string;
   trigger: HTMLButtonElement;
   hidden: boolean;
+  placement?: "beside" | "below";
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -15,12 +16,19 @@ export function CapitalActionsMenu({ id, name, trigger, hidden, onClose, onEdit,
   useLayoutEffect(() => {
     const menu = panel.current;
     if (hidden || !menu) { onClose(); return; }
+    trigger.setAttribute("aria-expanded", "true");
+    trigger.setAttribute("aria-controls", `capital-options-${id}`);
     const anchor = trigger.getBoundingClientRect();
     const bounds = menu.getBoundingClientRect();
     const gutter = 8;
-    // Prefer the left of the trigger; clamp both axes on narrow/short screens.
-    menu.style.left = `${Math.max(gutter, Math.min(anchor.left - bounds.width - 4, window.innerWidth - bounds.width - gutter))}px`;
-    menu.style.top = `${Math.max(gutter, Math.min(anchor.top + (anchor.height - bounds.height) / 2, window.innerHeight - bounds.height - gutter))}px`;
+    // List menus sit beside their row; popup menus open below the header.
+    // Clamp both axes, flipping above a popup trigger when space is short.
+    const left = placement === "below" ? anchor.right - bounds.width : anchor.left - bounds.width - 4;
+    const top = placement === "below"
+      ? (anchor.bottom + bounds.height + gutter <= window.innerHeight ? anchor.bottom + 4 : anchor.top - bounds.height - 4)
+      : anchor.top + (anchor.height - bounds.height) / 2;
+    menu.style.left = `${Math.max(gutter, Math.min(left, window.innerWidth - bounds.width - gutter))}px`;
+    menu.style.top = `${Math.max(gutter, Math.min(top, window.innerHeight - bounds.height - gutter))}px`;
     menu.querySelector("button")?.focus({ preventScroll: true });
 
     function close(restore = false) {
@@ -40,6 +48,7 @@ export function CapitalActionsMenu({ id, name, trigger, hidden, onClose, onEdit,
     function escape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       event.preventDefault();
+      event.stopPropagation();
       close(true);
     }
     const moved = () => close(menu.contains(document.activeElement));
@@ -51,18 +60,21 @@ export function CapitalActionsMenu({ id, name, trigger, hidden, onClose, onEdit,
     }
     document.addEventListener("pointerdown", outside);
     document.addEventListener("focusin", focus);
-    document.addEventListener("keydown", escape);
+    // Capture before the popup's Escape handler: close only this menu first.
+    document.addEventListener("keydown", escape, true);
     // Close rather than leave a detached overlay when its anchor moves.
     document.addEventListener("scroll", scrolled, true);
     window.addEventListener("resize", moved);
     return () => {
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("focusin", focus);
-      document.removeEventListener("keydown", escape);
+      document.removeEventListener("keydown", escape, true);
       document.removeEventListener("scroll", scrolled, true);
       window.removeEventListener("resize", moved);
+      trigger.setAttribute("aria-expanded", "false");
+      trigger.removeAttribute("aria-controls");
     };
-  }, [trigger, hidden, onClose]);
+  }, [id, trigger, hidden, placement, onClose]);
 
   if (hidden) return null;
   return createPortal(

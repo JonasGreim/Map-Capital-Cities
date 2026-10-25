@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useCapitalStore } from "../src/capital-store";
+import { CapitalActions } from "../src/CapitalActions";
 import { CapitalList } from "../src/CapitalList";
 
 const prague = { id: 1, name: "Prague", country: "Czechia", latitude: 50.0755, longitude: 14.4378 };
@@ -46,7 +47,7 @@ test("confirmed edits retain selection; failed deletes retain it; confirmed dele
 
 test("rows use native selection buttons, with actions outside their activation targets", () => {
   useCapitalStore.setState({ capitals: [prague], selectedCapitalId: 1 });
-  const html = renderToStaticMarkup(<CapitalList capitals={[prague]} loading={false} error={null} onRetry={async () => {}} />);
+  const html = renderToStaticMarkup(<CapitalActions><CapitalList capitals={[prague]} loading={false} error={null} onRetry={async () => {}} /></CapitalActions>);
   assert.match(html, /<button type="button" class="capital-label" aria-label="Show Prague, Czechia on map" aria-pressed="false">/);
   assert.match(html, /<\/button><div class="row-actions"><button[^>]*aria-label="Actions for Prague"/);
 });

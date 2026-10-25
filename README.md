@@ -323,7 +323,18 @@ to change the same four fields and **Save changes**. Choose **Delete** from that
 actions panel and review the capital/country in the confirmation,
 then choose **Delete capital**. **Cancel** or Escape closes either dialog without
 writing. While a request is pending, controls and dismissal are disabled to avoid
-duplicate submissions. Success is announced above the list.
+duplicate submissions. Success appears briefly at the upper-right of the window.
+
+You can also open a capital's marker popup and choose **Map actions for [capital]**
+(⋮) in its header, then **Edit** or **Delete**. Both entry points share one actions
+panel and the same dialogs, validation and store mutations. The dialogs and success
+feedback also work with the sidebar collapsed. Escape closes the actions panel
+first; outside click dismisses it. Closing a dialog returns focus to its trigger
+when available, or a visible Add capital button/map canvas after deletion or a
+filter exclusion. Opening/canceling a dialog does not navigate the map. Confirmed
+edits update popup data and marker position by ID, retaining color; only coordinate
+changes use the existing camera movement. Country edits respect the continent
+filter without changing the search or removing records from the full dataset.
 
 All fields are required. Blank names/countries and invalid characters are rejected;
 latitude must be a finite number in [-90, 90] and longitude in [-180, 180]. Field
@@ -622,8 +633,12 @@ existing directory outside the repository to capture this suite's screenshots.
 ### Browser runner and CI prerequisite
 
 `frontend/test/run-browser.mjs` starts only Vite, awaits server readiness and runs
-the flag, selection, sidebar, reset, continent and sidebar-polish suites in fresh Chromium
+the flag, selection, sidebar, reset, continent, sidebar-polish and popup-actions suites in fresh Chromium
 contexts. Every capital read/write is mocked; no backend or database is started.
+The popup-actions suite covers expanded/collapsed sidebars at all three viewports,
+keyboard and touch, long names/close-button geometry, shared edit/delete dialogs,
+validation and HTTP/network failures, pending writes, focus recovery, filters,
+stable camera/canvas/markers and listener cleanup on popup closure and unmount.
 It fails on missing
 Mapbox configuration or test errors and closes the browser/server on exit.
 Use existing Playwright tooling via `PLAYWRIGHT_MODULE` (an absolute module path),

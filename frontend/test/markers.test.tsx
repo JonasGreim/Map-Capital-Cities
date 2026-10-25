@@ -49,6 +49,8 @@ function setup(t: TestContext) {
   dom.activeElement = dom.body;
   const selections: (number | null)[] = [];
   const flights: unknown[] = [];
+  const openedActions: { id: number; trigger: HTMLButtonElement; name: string }[] = [];
+  const closedActions: HTMLButtonElement[] = [];
   let stops = 0;
   const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
   Object.defineProperty(globalThis, "document", { configurable: true, value: dom });
@@ -88,14 +90,47 @@ function setup(t: TestContext) {
   const canvas = new Element("canvas");
   const controller = createCapitalMarkers({ getCanvas: () => canvas, getContainer: () => canvas,
     getZoom: () => 2, stop: () => { stops += 1; }, flyTo: (options: unknown) => flights.push(options),
-  } as unknown as mapboxgl.Map, { Marker, Popup } as unknown as typeof mapboxgl, id => selections.push(id));
+  } as unknown as mapboxgl.Map, { Marker, Popup } as unknown as typeof mapboxgl, id => selections.push(id), {
+    onOpen: (capital, trigger) => openedActions.push({ id: capital.id, name: capital.name, trigger }),
+    onClose: trigger => closedActions.push(trigger),
+  });
   t.after(() => {
     controller.destroy();
     if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
     else Reflect.deleteProperty(globalThis, "document");
   });
-  return { controller, markers, popups, canvas, selections, flights, stops: () => stops };
+  return { controller, markers, popups, canvas, selections, flights, openedActions, closedActions, stops: () => stops };
 }
+
+test("popup actions delegate current records without selection or camera writes and clean up on every closure", t => {
+  const { controller, markers, popups, flights, selections, openedActions, closedActions } = setup(t);
+  controller.update([berlin, paris]);
+  for (const close of [() => popups.at(-1)!.remove(), () => controller.select(paris.id),
+    () => controller.update([paris]), () => controller.destroy()]) {
+    controller.update([berlin, paris]);
+    controller.select(berlin.id);
+    const popup = popups.at(-1)!;
+    const trigger = popup.content!.children[5];
+    assert.equal(trigger.type, "button");
+    assert.equal(trigger.className, "actions-trigger popup-actions-trigger");
+    assert.equal(trigger.attributes.get("aria-label"), "Map actions for Berlin");
+    trigger.click();
+    assert.equal(openedActions.at(-1)!.id, 1);
+    controller.update([{ ...berlin, name: "Renamed" }, paris]);
+    assert.equal(trigger.attributes.get("aria-label"), "Map actions for Renamed");
+    trigger.click();
+    assert.equal(openedActions.at(-1)!.name, "Renamed");
+    const calls = openedActions.length;
+    close();
+    assert.equal(closedActions.includes(trigger as unknown as HTMLButtonElement), true);
+    trigger.click();
+    assert.equal(openedActions.length, calls, "detached trigger must release its listener");
+    assert.equal(popup.closeListeners.size, 0);
+    assert.equal(flights.length, 0);
+    assert.deepEqual(selections.filter(id => id !== null), []);
+  }
+  assert.ok(markers.every(marker => marker.removed));
+});
 
 function choose(popup: { content?: Element }, value: string) {
   const button = popup.content!.children[3].children[1].children[markerColors.findIndex(color => color.value === value)];

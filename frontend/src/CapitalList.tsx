@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CapitalActionsMenu } from "./CapitalActionsMenu";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useCapitalActions } from "./CapitalActions";
 import type { Capital } from "./api";
 import { useCapitalStore } from "./capital-store";
-import { CapitalForm } from "./CapitalForm";
-import { DeleteCapitalDialog } from "./DeleteCapitalDialog";
 import { CountryFlag } from "./CountryFlag";
 import { ResetCapitalsDialog } from "./ResetCapitalsDialog";
 import { continentNames, matchesContinent, type ContinentFilter } from "./continent-filter";
@@ -34,16 +32,12 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
   const results = useRef<HTMLDivElement>(null);
   const retryButton = useRef<HTMLButtonElement>(null);
   const retryPending = useRef(false);
-  const { continent, setContinent, mutating, saveCapital, removeCapital, resetCapitals, selectedCapitalId, selectionSource, selectionVersion, selectCapital } = useCapitalStore();
+  const { continent, setContinent, mutating, resetCapitals, selectedCapitalId, selectionSource, selectionVersion, selectCapital } = useCapitalStore();
   const selectedRow = useRef<HTMLButtonElement>(null);
-  const [editor, setEditor] = useState<{ capital?: Capital } | null>(null);
-  const [deleting, setDeleting] = useState<Capital | null>(null);
   const [resetting, setResetting] = useState(false);
-  const [notice, setNotice] = useState("");
+  const { actions, toggleActions, closeActions, createCapital, setNotice } = useCapitalActions();
   const [query, setQuery] = useState("");
   const searchInput = useRef<HTMLInputElement>(null);
-  const [actions, setActions] = useState<{ capital: Capital; trigger: HTMLButtonElement } | null>(null);
-  const closeActions = useCallback(() => setActions(null), []);
   const filtered = useMemo(() => filterCapitals(capitals, query, continent), [capitals, query, continent]);
 
   useEffect(() => {
@@ -57,10 +51,9 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
   }, [selectedCapitalId, selectionSource, selectionVersion, collapsed]);
 
   useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 4000);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
+    if (actions?.trigger.closest("#capital-sidebar") && (collapsed || loading || !!error
+      || !filtered.some(capital => capital.id === actions.capital.id))) closeActions(actions.trigger);
+  }, [actions, collapsed, loading, error, filtered, closeActions]);
 
   useEffect(() => {
     if (loading || !retryPending.current) return;
@@ -101,12 +94,11 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
         </select>
       </div>
       <div className="list-actions">
-        <button id="add-capital" type="button" disabled={loading || mutating || !!error} onClick={() => { setNotice(""); setEditor({}); }}><span aria-hidden="true">＋</span> Add capital</button>
+        <button id="add-capital" type="button" disabled={loading || mutating || !!error} onClick={createCapital}><span aria-hidden="true">＋</span> Add capital</button>
         <button id="reset-capitals" type="button" className="secondary" disabled={loading || mutating || !!error}
           onClick={() => { setNotice(""); closeActions(); setResetting(true); }}>Reset to default</button>
       </div>
       <a className="skip-to-map" href="#world-map">Skip to map</a>
-      <p className="mutation-notice" role="status" aria-live="polite" aria-atomic="true">{notice}</p>
       <p id="search-results-count" className={query.trim() || continent ? "search-results-count" : "visually-hidden"} role="status">
         {!loading && !error ? `${filtered.length} of ${capitals.length} ${capitals.length === 1 ? "capital" : "capitals"}` : ""}
       </p>
@@ -125,7 +117,7 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
         ) : (
           <ul className="capital-list">
             {filtered.map((capital) => (
-              <li key={capital.id} data-selected={selectedCapitalId === capital.id || undefined} data-actions-open={actions?.capital.id === capital.id || undefined}>
+              <li key={capital.id} data-selected={selectedCapitalId === capital.id || undefined} data-actions-open={actions?.trigger.id === `capital-actions-${capital.id}` || undefined}>
                 <button type="button" className="capital-label" ref={selectedCapitalId === capital.id ? selectedRow : undefined}
                   aria-label={`Show ${capital.name}, ${capital.country} on map`} aria-pressed={selectedCapitalId === capital.id}
                   onClick={() => { closeActions(); selectCapital(capital.id); }}>
@@ -135,8 +127,8 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
                 </button>
                 <div className="row-actions">
                   <button id={`capital-actions-${capital.id}`} type="button" className="actions-trigger" disabled={mutating}
-                    aria-label={`Actions for ${capital.name}`} aria-expanded={actions?.capital.id === capital.id} aria-controls={actions?.capital.id === capital.id ? `capital-options-${capital.id}` : undefined}
-                    onClick={(event) => setActions(actions?.capital.id === capital.id ? null : { capital, trigger: event.currentTarget })}>
+                    aria-label={`Actions for ${capital.name}`} aria-expanded={actions?.trigger.id === `capital-actions-${capital.id}`} aria-controls={actions?.trigger.id === `capital-actions-${capital.id}` ? `capital-options-${capital.id}` : undefined}
+                    onClick={(event) => toggleActions(capital, event.currentTarget)}>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="19" r="1.7" /></svg>
                   </button>
                 </div>
@@ -145,19 +137,6 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
           </ul>
         )}
       </div>
-      {actions && <CapitalActionsMenu id={actions.capital.id} name={actions.capital.name} trigger={actions.trigger}
-        hidden={collapsed || loading || !!error || mutating || !filtered.some(capital => capital.id === actions.capital.id)}
-        onClose={closeActions}
-        onEdit={() => { setNotice(""); setEditor({ capital: actions.capital }); }}
-        onDelete={() => { setNotice(""); setDeleting(actions.capital); }} />}
-      {editor && <CapitalForm capital={editor.capital} onCancel={() => setEditor(null)} onSave={async (input, id) => {
-        await saveCapital(input, id);
-        setNotice(id === undefined ? "Capital created." : "Capital updated.");
-      }} />}
-      {deleting && <DeleteCapitalDialog capital={deleting} onCancel={() => setDeleting(null)} onDelete={async (id) => {
-        await removeCapital(id);
-        setNotice("Capital deleted.");
-      }} />}
       {resetting && <ResetCapitalsDialog onCancel={() => {
         setResetting(false);
         if (error) requestAnimationFrame(() => retryButton.current?.focus());

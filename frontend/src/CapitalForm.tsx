@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Capital, CapitalInput } from "./api";
 import { CapitalDialog } from "./CapitalDialog";
 
@@ -33,6 +33,7 @@ export function CapitalForm({ capital, onSave, onCancel }: {
   const pending = useRef(false);
   const form = useRef<HTMLFormElement>(null);
   const apiError = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { if (error && !busy) apiError.current?.focus(); }, [error, busy]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -49,8 +50,6 @@ export function CapitalForm({ capital, onSave, onCancel }: {
       onCancel();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Unable to save the capital. Please try again.");
-      // Focus after React has rendered the error; values stay untouched.
-      requestAnimationFrame(() => apiError.current?.focus());
     } finally { pending.current = false; setBusy(false); }
   }
 
