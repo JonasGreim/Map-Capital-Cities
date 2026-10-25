@@ -520,6 +520,16 @@ The Mapbox instance stays mounted throughout.
 
 ### Frontend verification
 
+The header brand is a native home link to `/`; it reloads the app and restores its
+initial state. Its globe uses a short hover/focus scale transition, disabled by
+reduced-motion preferences. The tab title is **Map Capital Cities** and the public
+SVG favicon reuses the header globe with thicker strokes for small sizes.
+`branding.test.tsx` checks the document and favicon over HTTP in Vite dev and a
+temporary production build/preview. `branding.browser.mjs` verifies SVG decoding,
+title, native mouse/keyboard navigation, focus, motion and layout at the three
+standard viewport sizes. It runs in the existing browser runner and can also run
+against production preview or an isolated Firefox Page via `verifyBranding`.
+
 `npm test -w frontend` covers the API contract and failures, request sharing,
 loading/error transitions, retry/reload and the rendered list states. Marker tests
 use small DOM/Mapbox doubles to cover coordinates, square CSS dimensions, popup
