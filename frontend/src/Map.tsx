@@ -114,6 +114,7 @@ export function Map({ active = true }: { active?: boolean }) {
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!active && picking) { cancelPick(); return; }
     if (!active || !map || !picking) return;
     // End an existing camera flight without starting another one.
     map.stop();

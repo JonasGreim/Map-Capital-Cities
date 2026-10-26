@@ -35,7 +35,12 @@ test("canvas clicks choose once; controls and invalid points do not; cleanup res
     for (const listener of listeners) listener({ originalEvent: { target }, lngLat: { lat, lng } } as mapboxgl.MapMouseEvent);
   };
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const dispose = listenForCoordinates(map, result => results.push(result));
+    const dispose = listenForCoordinates(map, result => {
+      // The callback resumes a native modal. Cleanup must precede that handoff.
+      assert.equal(canvas.style.cursor, "grab");
+      assert.equal(listeners.size, 0);
+      results.push(result);
+    });
     assert.equal(canvas.style.cursor, "crosshair");
     assert.equal(listeners.size, 1);
     click({}); // A marker, popup or Mapbox control.
@@ -57,10 +62,56 @@ test("canvas clicks choose once; controls and invalid points do not; cleanup res
   assert.equal(listeners.size, 0);
 });
 
+test("cleanup is idempotent and preserves a newer tool or picking session's cursor", () => {
+  const canvas = { style: { cursor: "" } };
+  const map = { getCanvas: () => canvas, on: () => {}, off: () => {} } as unknown as mapboxgl.Map;
+  const first = listenForCoordinates(map, () => {});
+  first();
+  const second = listenForCoordinates(map, () => {});
+  first(); // A late cleanup must not reset the new session's crosshair.
+  assert.equal(canvas.style.cursor, "crosshair");
+  canvas.style.cursor = "pointer"; // Another tool takes ownership.
+  second();
+  assert.equal(canvas.style.cursor, "pointer");
+  second();
+  assert.equal(canvas.style.cursor, "pointer");
+});
+
 test("map picking is a secondary non-submit action with an explained manual fallback", () => {
   const picker = { available: true, active: false, start: () => assert.fail("Rendering must not start a pick"), clearPreview: () => {} };
   const render = (available: boolean) => renderToStaticMarkup(<CapitalForm picker={{ ...picker, available }} onSave={async () => assert.fail("Rendering must not save")} onCancel={() => {}} />);
   assert.match(render(true), /id="pick-on-map" type="button" class="secondary pick-on-map"/);
   assert.match(render(false), /disabled="" aria-describedby="pick-unavailable"/);
   assert.match(render(false), /Enter coordinates manually/);
+  assert.match(render(true), /Select on map<\/button>/);
+  assert.match(render(true), /aria-describedby="pick-description"/);
+});
+
+test("add and edit share compact, labeled fields with coordinate ranges and a close action", () => {
+  const render = (editing: boolean) => renderToStaticMarkup(<CapitalForm
+    capital={editing ? { id: 1, name: "Draft", country: "Country", latitude: 12.12345678, longitude: -1 } : undefined}
+    onSave={async () => {}} onCancel={() => {}} />);
+  for (const editing of [false, true]) {
+    const markup = render(editing);
+    assert.match(markup, editing ? /Edit Capital City/ : /Add a New Capital City/);
+    assert.match(markup, /aria-label="Close dialog"/);
+    assert.match(markup, /aria-describedby="dialog-description"/);
+    assert.match(markup, /aria-hidden="true"/);
+    assert.match(markup, /name="latitude"[^>]*type="number"[^>]*step="any"[^>]*min="-90"[^>]*max="90"/);
+    assert.match(markup, /aria-describedby="latitude-range"/);
+    assert.match(markup, /aria-describedby="longitude-range"/);
+    assert.match(markup, /Range: -90 to 90/);
+    assert.match(markup, /Range: -180 to 180/);
+    assert.doesNotMatch(markup, /e\.g\. (?:Paris|France)|Name of the capital city/);
+    assert.equal((markup.match(/class="capital-input-icon" aria-hidden="true"/g) ?? []).length, 4);
+    assert.match(markup, /name="latitude"[^>]*placeholder="e\.g\. 48\.8700"/);
+    assert.match(markup, /name="longitude"[^>]*placeholder="e\.g\. 2\.3300"/);
+    if (editing) {
+      assert.match(markup, /value="12.12345678"/);
+      assert.match(markup, /name="longitude"[^>]*value="-1"/);
+    } else {
+      assert.match(markup, /name="latitude"[^>]*value=""/);
+      assert.match(markup, /name="longitude"[^>]*value=""/);
+    }
+  }
 });

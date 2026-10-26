@@ -15,5 +15,5 @@ export function viewButton(page, name) {
   if (page.viewportSize().width <= 700 && ["Collapse sidebar", "Expand sidebar"].includes(name)) {
     return page.getByRole("tab", { name: name === "Collapse sidebar" ? "Map" : "Capitals", exact: true });
   }
-  return page.getByRole("button", { name, exact: true, includeHidden: !["Cancel", "Pick on map", "Create capital", "Save changes"].includes(name) });
+  return page.getByRole("button", { name, exact: true, includeHidden: !["Cancel", "Select on map", "Create capital", "Save changes"].includes(name) });
 }
