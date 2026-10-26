@@ -103,7 +103,7 @@ export async function verifySidebar(page, baseURL) {
     assert.equal(await button("Edit").count(), 0);
     await showView(page, "Capitals"); await button("Actions for Berlin").click();
     await button("Edit").click();
-    await page.getByRole("dialog", { name: "Edit capital" }).waitFor();
+    await page.getByRole("dialog", { name: "Edit Capital City" }).waitFor();
     assert.equal(await page.getByLabel("Capital name", { exact: true }).inputValue(), "Berlin");
     await page.keyboard.press("Escape");
     await focused(button("Actions for Berlin"));

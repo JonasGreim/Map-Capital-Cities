@@ -133,7 +133,7 @@ export async function verifyContinents(page, baseURL, screenshotDirectory) {
     await button("Edit").click();
     await page.getByRole("textbox", { name: "Country name", exact: true }).fill("Japan");
     await button("Save changes").click();
-    await page.getByRole("dialog", { name: "Edit capital", exact: true }).waitFor({ state: "hidden" });
+    await page.getByRole("dialog", { name: "Edit Capital City", exact: true }).waitFor({ state: "hidden" });
     assert.equal(await visibleMarkers().count(), 1);
     assert.equal((await state()).selectedCapitalId, null);
     assert.equal(await page.locator(".mapboxgl-popup").count(), 0);
@@ -148,7 +148,7 @@ export async function verifyContinents(page, baseURL, screenshotDirectory) {
       await page.getByRole("spinbutton", { name: "Latitude", exact: true }).fill("10");
       await page.getByRole("spinbutton", { name: "Longitude", exact: true }).fill("20");
       await button("Create capital").click();
-      await page.getByRole("dialog", { name: "Add capital", exact: true }).waitFor({ state: "hidden" });
+      await page.getByRole("dialog", { name: "Add a New Capital City", exact: true }).waitFor({ state: "hidden" });
       assert.equal(await button(`Actions for ${name}`).count(), shown ? 1 : 0);
       await showView(page, "Map");
       assert.equal(await page.locator(`.capital-marker[aria-label^="${name},"]`).isVisible(), shown);

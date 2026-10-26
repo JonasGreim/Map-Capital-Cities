@@ -132,13 +132,13 @@ export async function verifyMobileNavigation(page, baseURL, screenshotDirectory)
   await button("Add capital").click();
   await button("Create capital").click(); await focused(field("Capital name"));
   await field("Capital name").fill("Mobile city"); await field("Country name").fill("Mobile country");
-  await button("Pick on map").click();
+  await button("Select on map").click();
   await page.locator(".coordinate-pick-banner").waitFor();
   assert.equal(await tab("Map").getAttribute("aria-selected"), "true");
-  await button("Cancel").click(); await focused(button("Pick on map"));
+  await button("Cancel").click(); await focused(button("Select on map"));
   assert.equal(await tab("Capitals").getAttribute("aria-selected"), "true");
-  await button("Pick on map").click(); await page.keyboard.press("Escape"); await focused(button("Pick on map"));
-  await button("Pick on map").click();
+  await button("Select on map").click(); await page.keyboard.press("Escape"); await focused(button("Select on map"));
+  await button("Select on map").click();
   await page.locator(".coordinate-pick-banner").waitFor();
   await idle();
   const bounds = await page.locator(".mapboxgl-canvas").boundingBox();
