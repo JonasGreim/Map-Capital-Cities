@@ -145,6 +145,16 @@ For a real browser check after backend startup (mobile list actions use the Capi
 5. Inspect browser console errors. An intentionally mocked HTTP failure is
    expected during the error check; normal loading should have no errors.
 
+`frontend/test/sidebar-rail.browser.mjs` verifies the desktop header relocation,
+64px shortcut rail, shared list/popover search, direct Add dialog, flag navigation,
+Escape/outside-click/Tab focus, repeated toggles and retained list scroll, filter,
+selection, marker colors and canvas/marker identity. It measures API-read and
+Mapbox-construction counts at 1440px, 1024px, 701px and 1024×360, then checks the
+unchanged mobile header/tabs at 390px and 320px. Run with
+`BROWSER_SUITES=sidebar-rail` through the runner below; `BROWSER_SCREENSHOT_DIR`
+captures expanded/collapsed/search desktop and mobile states outside the repo.
+All capital traffic is mocked; Mapbox uses the real browser and network.
+
 `frontend/test/sidebar.browser.mjs` exports `verifySidebar(page, baseURL)` for an
 isolated Playwright Page. With the frontend running and Playwright supplied by the
 browser tooling, run `await verifySidebar(page, "http://127.0.0.1:5173")` (use the

@@ -190,6 +190,24 @@ test("country edits update the open definition list and clear stale facts withou
   assert.deepEqual(flights, []);
 });
 
+test("longer popup edits stay within the available height without a camera or selection change", t => {
+  const { controller, popups, markers, flights, selections } = setup(t);
+  controller.update([berlin]);
+  controller.select(berlin.id);
+  const popup = popups[0];
+  const content = popup.content!;
+  // The marker anchors the bottom at 300px; edited text can otherwise grow
+  // above a full-height map's top edge. Keep the existing internal scroller.
+  content.getBoundingClientRect = () => ({ top: -42, left: 10, right: 296, bottom: 300 });
+  controller.update([{ ...berlin, country: "A much longer country name" }]);
+  assert.equal((content.style as unknown as CSSStyleDeclaration).maxHeight, "292px");
+  assert.equal(popups.length, 1);
+  assert.equal(markers.length, 1);
+  assert.equal(popup.removed, false);
+  assert.deepEqual(flights, []);
+  assert.deepEqual(selections, []);
+});
+
 test("every valid capital gets a square marker at [longitude, latitude], including nearby capitals", (t) => {
   const { controller, markers } = setup(t);
   controller.update([berlin, paris, { ...paris, id: 3 }, { ...berlin, id: 4, latitude: NaN },
