@@ -13,20 +13,21 @@
 Explore capital cities around the world on an interactive map. Discover countries
 and their capitals, search and filter locations, customize markers, and add or edit your own entries.
 
-- Interactive Mapbox world map with square 32 × 32px markers and a linked capital/country list.
-- Create, edit and delete capitals; pick coordinates on the map or restore the default dataset.
-- Search the list by capital or country; filter both the list and map by continent.
-- Country flags and popup facts: continent, country population and currencies.
-- Four marker colors, saved in the current browser across reloads.
-- Desktop sidebar and mobile **Map / Capitals** bottom navigation.
+- Interactive world map with capital city markers and a linked capital/country list
+- Select a capital from the list to fly to its location and open its popup on the map
+- Create, edit and delete capitals; pick coordinates on the map or restore the default dataset
+- Search capitals and countries; filter the list and map by continent
+- Country flags and popup facts: continent, country population and currencies
+- Four marker colors, saved in the current browser across reloads
+- Desktop sidebar and mobile **Map / Capitals** bottom navigation
 
 ### Tech Stack
 
-- **Frontend:** React 18, TypeScript, Vite 5, Zustand 4, plain CSS.
-- **Backend:** Node.js 24, Fastify 5 · **Database:** PostgreSQL 16.
-- **Maps & Data:** Mapbox GL JS 3, REST Countries v5.
-- **Infrastructure:** npm workspaces, Docker Compose, Nginx.
-- **Testing & Quality:** Node test runner / tsx, ESLint, TypeScript, GitHub Actions.
+- **Frontend:** React 18, TypeScript, Vite 5, Zustand 4, plain CSS
+- **Backend:** Node.js 24, Fastify 5 · **Database:** PostgreSQL 16
+- **Maps & Data:** Mapbox GL JS 3, REST Countries v5
+- **Infrastructure:** npm workspaces, Docker Compose, Nginx
+- **Testing & Quality:** Node test runner / tsx, ESLint, TypeScript, GitHub Actions
 
 ## 📚 Table of Contents
 
@@ -54,9 +55,9 @@ and their capitals, search and filter locations, customize markers, and add or e
 
 ### Prerequisites
 
-- Docker.
-- A [REST Countries API key](https://restcountries.com).
-- A [public Mapbox token](https://account.mapbox.com).
+- Docker with Docker Compose v2
+- A [REST Countries API key](https://restcountries.com)
+- A [public Mapbox token](https://account.mapbox.com)
 
 ### Environment Variables
 
@@ -85,9 +86,9 @@ See [Docker details](docs/development.md#full-stack-docker-demo) for configurati
 
 ### Prerequisites
 
-- Node.js **24.22.1**.
-- npm **11.19.1**.
-- Docker.
+- Node.js `24.22.1`
+- npm `11.19.1`
+- Docker with Docker Compose v2
 
 ### Running the Development Server
 
@@ -101,7 +102,6 @@ npm run dev
 
 - **Frontend:** <http://localhost:5173>
 - **Backend:** <http://localhost:3001>
-- **Health:** <http://localhost:3001/health>
 
 See [development setup and troubleshooting](docs/development.md).
 
@@ -126,7 +126,7 @@ See [Testing](docs/testing.md) for details.
 
 ## 📖 Documentation <a name="documentation"></a>
 
-- [Technical Reference](docs/technical-reference.md): API, import, schema, reset/security and UI behavior.
-- [Development](docs/development.md): configuration, Docker operation and troubleshooting.
-- [Testing](docs/testing.md): unit, PostgreSQL, browser tests and coverage status.
-- [Submission / Validation](docs/submission.md): readiness checklist and validation reports.
+- [Technical Reference](docs/technical-reference.md): API, import, schema, reset/security and UI behavior
+- [Development](docs/development.md): configuration, Docker operation and troubleshooting
+- [Testing](docs/testing.md): unit, PostgreSQL, browser tests and coverage status
+- [Submission / Validation](docs/submission.md): readiness checklist and validation reports
