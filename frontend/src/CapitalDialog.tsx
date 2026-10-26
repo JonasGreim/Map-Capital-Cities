@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
-export function CapitalDialog({ title, busy, onClose, children, suspended = false, resumeFocus, headerIcon, description }: {
+export function CapitalDialog({ title, busy, onClose, children, suspended = false, resumeFocus, headerIcon, description, className }: {
   title: string;
   busy: boolean;
   onClose: () => void;
@@ -9,6 +9,7 @@ export function CapitalDialog({ title, busy, onClose, children, suspended = fals
   resumeFocus?: string;
   headerIcon?: ReactNode;
   description?: string;
+  className?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -40,7 +41,7 @@ export function CapitalDialog({ title, busy, onClose, children, suspended = fals
   }, [suspended, resumeFocus]);
 
   return (
-    <dialog ref={dialog} className={`capital-dialog${headerIcon ? " capital-editor" : ""}`} aria-labelledby="dialog-title" aria-busy={busy}
+    <dialog ref={dialog} className={`capital-dialog${headerIcon ? " capital-editor" : ""}${className ? ` ${className}` : ""}`} aria-labelledby="dialog-title" aria-busy={busy}
       aria-describedby={description ? "dialog-description" : undefined}
       onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}>
       {headerIcon ? <header className="capital-editor-header">

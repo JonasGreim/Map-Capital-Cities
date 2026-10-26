@@ -1,4 +1,4 @@
-/* global document, window, performance, innerWidth, URL */
+/* global document, window, performance, innerWidth, innerHeight, URL, getComputedStyle, localStorage */
 import assert from "node:assert/strict";
 import { showView, viewButton } from "./view-helpers.mjs";
 
@@ -75,6 +75,19 @@ export async function verifyReset(page, baseURL, screenshotDirectory) {
     await page.keyboard.press("Enter");
     await dialog().waitFor();
     await focused(button("Cancel"));
+    assert.equal(await dialog().getAttribute("aria-describedby"), "dialog-description");
+    assert.deepEqual(await dialog().locator("li").allTextContents(), [
+      "All manually added capitals will be deleted.",
+      "Deleted default capitals will return.",
+      "Marker colors will return to teal in this browser.",
+    ]);
+    assert.equal(await dialog().evaluate(el => el.scrollWidth <= el.clientWidth), true);
+    const iconColors = await dialog().locator(".reset-consequence-icon").evaluateAll(elements => elements.map(el => getComputedStyle(el).color));
+    assert.deepEqual(iconColors, Array(3).fill("rgb(82, 103, 116)"));
+    await page.keyboard.press("Shift+Tab");
+    await focused(button("Close dialog"));
+    await page.keyboard.press("Tab");
+    await focused(button("Cancel"));
     if (screenshotDirectory) await page.screenshot({ path: `${screenshotDirectory}/reset-dialog-${width}.png`, fullPage: true });
     await page.keyboard.press("Tab");
     await focused(button("Reset capitals"));
@@ -87,6 +100,11 @@ export async function verifyReset(page, baseURL, screenshotDirectory) {
     await showView(page, "Capitals"); await button("Reset to default").click();
     await button("Cancel").click();
     assert.equal(posts, before);
+    await focused(button("Reset to default"));
+    await button("Reset to default").click();
+    await button("Close dialog").click();
+    await focused(button("Reset to default"));
+    assert.equal(posts, before);
 
     // Hold the write: repeated activation and Escape must not launch/dismiss it.
     mode = "hold";
@@ -94,6 +112,9 @@ export async function verifyReset(page, baseURL, screenshotDirectory) {
     await button("Reset capitals").evaluate(el => { el.click(); el.click(); });
     await page.getByText("Resetting capitals…", { exact: true }).waitFor();
     assert.equal(await button("Cancel").isDisabled(), true);
+    assert.equal(await button("Close dialog").isDisabled(), true);
+    assert.equal(await button("Resetting…").isDisabled(), true);
+    assert.equal(await dialog().getAttribute("aria-busy"), "true");
     assert.equal(await button("Add capital").isDisabled(), true);
     await page.keyboard.press("Escape");
     assert.equal(await dialog().isVisible(), true);
@@ -106,6 +127,7 @@ export async function verifyReset(page, baseURL, screenshotDirectory) {
     assert.equal(await page.locator(".capital-marker").count(), 2);
     assert.equal(await page.locator(".mapboxgl-popup").count(), 0);
     assert.equal(await page.locator("li[data-selected]").count(), 0);
+    assert.equal(await page.evaluate(() => localStorage.getItem("map-capital-cities.marker-colors.v1")), null);
     assert.equal(await button("Actions for Manual capital").count(), 0);
     assert.deepEqual(await page.evaluate(async () => {
       const { useCapitalStore } = await import("/src/capital-store.ts");
@@ -124,6 +146,31 @@ export async function verifyReset(page, baseURL, screenshotDirectory) {
     if (screenshotDirectory) await page.screenshot({ path: `${screenshotDirectory}/reset-${width}.png`, fullPage: true });
     evidence.push({ width, cancel: true, keyboard: true, duplicateProtection: true, teal: true, canvasAndCameraPreserved: true, overflow: false });
   }
+  const compactEvidence = [];
+  for (const [width, height, largeText] of [[667, 375, false], [390, 320, false], [390, 844, true], [320, 568, true]]) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(large => { document.documentElement.style.fontSize = large ? "200%" : ""; }, largeText);
+    await showView(page, "Capitals"); await button("Reset to default").click();
+    await focused(button("Cancel"));
+    const before = posts;
+    for (const control of [button("Close dialog"), button("Cancel"), button("Reset capitals")]) {
+      await control.focus();
+      await control.scrollIntoViewIfNeeded();
+      assert.equal(await control.evaluate(el => {
+        const rect = el.getBoundingClientRect();
+        return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight && el.scrollWidth <= el.clientWidth;
+      }), true, `control reachable at ${width}×${height}, largeText=${largeText}`);
+    }
+    assert.equal(await dialog().evaluate(el => el.scrollWidth <= el.clientWidth), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    if (screenshotDirectory) await page.screenshot({ path: `${screenshotDirectory}/reset-compact-${width}-${height}-${largeText}.png` });
+    await page.keyboard.press("Escape");
+    await focused(button("Reset to default"));
+    assert.equal(posts, before);
+    compactEvidence.push({ width, height, largeText, controlsReachable: true, noWrites: true });
+  }
+  await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
+  await page.setViewportSize({ width: 390, height: 844 });
   // A known failure preserves the current color and data, with safe focused feedback.
   await showView(page, "Map"); await button("Red marker").click();
   mode = "error";
@@ -137,6 +184,7 @@ export async function verifyReset(page, baseURL, screenshotDirectory) {
   assert.equal(await page.locator(".mutation-notice").textContent(), "");
   assert.equal(await button("Red marker").getAttribute("aria-pressed"), "true");
   assert.equal(posts, before + 1);
+  if (screenshotDirectory) await page.screenshot({ path: `${screenshotDirectory}/reset-error.png` });
   await button("Reload current data").click();
   await dialog().waitFor({ state: "hidden" });
   assert.equal(posts, before + 1);
@@ -158,5 +206,5 @@ export async function verifyReset(page, baseURL, screenshotDirectory) {
   await showView(page, "Capitals"); await button("Actions for Berlin").waitFor();
   assert.equal(posts, before + 2);
   assert.deepEqual(errors, []);
-  return { viewports: evidence, safeFailure: true, lostResponseReadRecovery: true, pageErrors: errors };
+  return { viewports: evidence, compactEvidence, safeFailure: true, lostResponseReadRecovery: true, pageErrors: errors };
 }
