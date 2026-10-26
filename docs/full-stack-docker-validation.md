@@ -1,4 +1,40 @@
-# Optional full-stack Docker validation — Issue #35
+# Full-stack Docker validation
+
+## Default Compose startup — PR #52 follow-up
+
+Checked on **26 October 2026**, following the README layout commits. The full-stack
+file is renamed byte-for-byte from `compose.full.yaml` to `compose.yaml`;
+`docker-compose.yml`, all Dockerfiles, services, health checks and volumes are
+unchanged. `npm run db` now explicitly uses `-f docker-compose.yml`. The original
+Issue #35 evidence below describes the earlier filename and remains historical.
+Current operation is documented in [Development](development.md#full-stack-docker-demo).
+
+A fresh export of the staged tree and its own Node **24.22.1** / npm **11.19.1**
+installation were used. Local credentials were supplied only through an ignored
+root `.env`; no values were printed. Tests used new Compose projects
+`map-capitals-issue52-fresh` and `map-capitals-issue52-dev`, with separate new volumes.
+
+| Check | Actual result |
+| --- | --- |
+| Default file discovery | Exact `docker compose up -d`, without `-f` or `--build`, selected `compose.yaml`, built the missing local app images and started db/api/frontend. This Compose 2.3.3 client warns about both supported filenames; it selects the full-stack file without merging them. |
+| Browser origin / real services | Frontend HTML, `/health` and `/capital` passed on the normal port **8080**; the real startup import inserted **248** capitals into fresh PostgreSQL. |
+| API and persistence | POST through Nginx returned 201 for one synthetic probe in the isolated demo. `docker compose down` retained the volume; `up -d` restored the same probe, ID and response. No reset or existing data mutation. |
+| DB-only npm command | Actual `npm run db` started only the development `db` service under its own project. In the test copy only, its host port was changed from occupied 5432 to **55452**; the repository's DB-only file is byte-for-byte unchanged. |
+| Development regression | Actual `npm run dev` in the fresh installation used that separate DB and completed a real 248-capital import. API health/list, frontend HTML and Vite proxy passed on **3052/5174**, because ordinary 3001/5173 were occupied. The npm dev script is unchanged. |
+| Existing database isolation | Effective DB-only configuration still resolves to `fullstack-test-template_pgdata` for the original project directory. The original running DB container ID, start time and mounts were unchanged; all ten pre-existing volumes remain present. No command wrote to or deleted an existing volume. |
+| Cleanup | Own dev processes and both test stacks stopped. Both new test volumes, including the persistence probe, remain; no volume was deleted. |
+| Project checks | `npm ci` in the fresh export, `npm run check`, `npm test` and `git diff --check` passed. 135 tests passed; 2 optional PostgreSQL suites skipped. The live checks above independently exercised real PostgreSQL. |
+
+The first persistence harness included Compose's filename warnings in parsed service
+output and stopped before creating its probe. Separating stderr corrected the
+harness; the complete persistence test then passed. No service configuration fix
+or relaxed application assertion was needed.
+
+This is a focused startup/HTTP/persistence regression, not a new full browser,
+physical-device or production-deployment certification. Existing development-tool
+advisories and the Vite bundle warning remain. No generated artifacts were committed.
+
+## Original optional Docker implementation — Issue #35
 
 Checked on **26 October 2026** from GitHub `main`
 `76b0516ba0ac6c0758b76a7bc894e3c7c70a46ec` (includes #48 and #49).
