@@ -36,16 +36,12 @@ Explore capital cities around the world on an interactive map. Discover countrie
 
 ## 🖼️ Screenshots <a name="screenshots"></a>
 
-<!-- TODO: Add docs/images/desktop.png, then remove this comment wrapper.
-<img src="docs/images/desktop.png" alt="Desktop: capital list beside the world map, capital markers and an open country popup" width="960">
--->
+<img src="docs/images/desktop.png" alt="Desktop: European capital markers, Paris selected in the list and an open country popup" width="960">
 
-<!-- TODO: Add both mobile images, then remove this comment wrapper.
 <p>
-  <img src="docs/images/mobile-map.png" alt="Mobile Map view with capital markers and Map / Capitals bottom navigation" width="280">
-  <img src="docs/images/mobile-capitals.png" alt="Mobile Capitals view with country search and continent filter" width="280">
+  <img src="docs/images/mobile-map.png" alt="Mobile Map view with Paris country information, capital markers and bottom navigation" width="280">
+  <img src="docs/images/mobile-capitals.png" alt="Mobile Capitals view with search, Europe filter, capital list, Add and Reset controls" width="280">
 </p>
--->
 
 ## 🚀 Getting Started <a name="getting-started"></a>
 

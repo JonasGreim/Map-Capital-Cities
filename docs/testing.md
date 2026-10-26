@@ -41,6 +41,8 @@ checked assignment requirements, fresh setup, live PostgreSQL/Mapbox results,
 remaining limitations and manual submission checklist for Issue #7.
 The later [repository cleanup audit](repository-cleanup.md) records Issue #61
 findings, validation and readiness for the final #62 acceptance pass.
+The [final acceptance report](final-qa.md) records #62 with both PostgreSQL suites,
+all existing browser suites and real isolated full-stack acceptance.
 
 Repository Codex guidance is in [AGENTS.md](../AGENTS.md); use `$issue-work #N` for implementation
 and `$pr-review #N` for a read-only review. `.codex/config.toml` contains pinned,
