@@ -80,9 +80,28 @@ test("sidebar replaces refresh with adjacent reset; opening confirmation perform
   assert.match(sidebar, /Add capital<\/button><button id="reset-capitals"/);
   assert.doesNotMatch(sidebar, /Refresh list/);
   const dialog = renderToStaticMarkup(<ResetCapitalsDialog onReset={operation} onReload={operation} onCancel={() => {}} />);
-  assert.match(dialog, /all manually added capitals will be deleted/);
+  assert.match(dialog, /All manually added capitals will be <strong>deleted\.<\/strong>/);
   assert.match(dialog, /shared demo data for everyone/);
-  assert.match(dialog, /Teal/);
+  assert.match(dialog, /<strong>teal<\/strong> in this browser/);
   assert.match(dialog, /autofocus=""[^>]*>Cancel/);
   assert.equal(writes, 0);
+});
+
+test("reset dialog presents exactly three consequences, shared-data warning and accessible header", () => {
+  const markup = renderToStaticMarkup(<ResetCapitalsDialog onReset={async () => {}} onReload={async () => {}} onCancel={() => {}} />);
+  const copy = markup.replace(/<[^>]+>/g, "");
+  assert.match(markup, /class="capital-dialog capital-editor reset-dialog"/);
+  assert.match(markup, /aria-labelledby="dialog-title" aria-busy="false" aria-describedby="dialog-description"/);
+  assert.match(markup, /aria-label="Close dialog"/);
+  assert.match(copy, /This will restore all default capital names, countries and coordinates\./);
+  const consequences = [...markup.matchAll(/<li>(.*?)<\/li>/g)].map(row => row[1].replace(/<[^>]+>/g, ""));
+  assert.deepEqual(consequences, [
+    "All manually added capitals will be deleted.",
+    "Deleted default capitals will return.",
+    "Marker colors will return to teal in this browser.",
+  ]);
+  assert.equal((markup.match(/class="reset-consequence-icon" aria-hidden="true"/g) ?? []).length, 3);
+  assert.match(markup, /This changes the shared demo data for everyone and <strong>cannot be undone\.<\/strong>/);
+  assert.doesNotMatch(copy, /IDs|selection|popup|session/);
+  assert.match(markup, /class="reset-confirm"/);
 });

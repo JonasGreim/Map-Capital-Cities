@@ -21,15 +21,30 @@ export function ResetCapitalsDialog({ onReset, onReload, onCancel }: {
     } finally { pending.current = false; setBusy(false); }
   }
   return (
-    <CapitalDialog title="Reset to default" busy={busy} onClose={onCancel}>
-      <p>Restore all default capital names, countries and coordinates? Deleted default capitals will return and all manually added capitals will be deleted.</p>
-      <p>This changes the shared demo data for everyone. Capitals receive new IDs. The selection and popup will close, and all marker colors in this session will return to Teal. This cannot be undone.</p>
+    <CapitalDialog title="Reset to default" busy={busy} onClose={onCancel} className="reset-dialog" resumeFocus=".reset-cancel"
+      headerIcon={<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 6.1A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.9 5.9" /></svg>}
+      description="This will restore all default capital names, countries and coordinates.">
+      <ul className="reset-consequences">
+        <li>
+          <span className="reset-consequence-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></svg></span>
+          <span>All manually added capitals will be <strong>deleted.</strong></span>
+        </li>
+        <li>
+          <span className="reset-consequence-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0" /></svg></span>
+          <span>Deleted default capitals will <strong>return.</strong></span>
+        </li>
+        <li>
+          <span className="reset-consequence-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M21 11a9 9 0 1 0-9 10h1a2 2 0 0 0 1.6-3.2 1.5 1.5 0 0 1 1.2-2.4H17a4 4 0 0 0 4-4.4Z" /><circle cx="7" cy="11" r="0.8" /><circle cx="10" cy="7" r="0.8" /><circle cx="15" cy="7" r="0.8" /><circle cx="17" cy="11" r="0.8" /></svg></span>
+          <span>Marker colors will return to <strong>teal</strong> in this browser.</span>
+        </li>
+      </ul>
+      <p className="reset-warning">This changes the shared demo data for everyone and <strong>cannot be undone.</strong></p>
       {error && <p ref={apiError} className="field-error" role="alert" tabIndex={-1}>{error}</p>}
       <div className="dialog-actions">
-        <button type="button" className="secondary" autoFocus disabled={busy} onClick={onCancel}>Cancel</button>
+        <button type="button" className="secondary reset-cancel" autoFocus disabled={busy} onClick={onCancel}>Cancel</button>
         {error
           ? <button type="button" disabled={busy} onClick={() => { void run(onReload); }}>Reload current data</button>
-          : <button type="button" disabled={busy} onClick={() => { void run(onReset); }}>{busy ? "Resetting…" : "Reset capitals"}</button>}
+          : <button type="button" className="reset-confirm" disabled={busy} onClick={() => { void run(onReset); }}>{busy ? "Resetting…" : "Reset capitals"}</button>}
       </div>
       {busy && <p role="status">{error ? "Loading capitals…" : "Resetting capitals…"}</p>}
     </CapitalDialog>

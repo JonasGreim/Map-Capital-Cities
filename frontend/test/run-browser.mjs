@@ -37,7 +37,7 @@ try {
     if (process.env.BROWSER_SUITES && !process.env.BROWSER_SUITES.split(",").includes(name)) continue;
     const context = await browser.newContext({ hasTouch: name === "popup-actions" });
     try {
-      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", ["mobile-responsive", "mobile-navigation", "toast", "coordinate-picker", "marker-colors", "sidebar-polish", "popup-actions"].includes(name) ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
+      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", ["reset", "mobile-responsive", "mobile-navigation", "toast", "coordinate-picker", "marker-colors", "sidebar-polish", "popup-actions"].includes(name) ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
     } catch (error) {
       if (process.env.BROWSER_SCREENSHOT_DIR) {
         const page = context.pages()[0];
