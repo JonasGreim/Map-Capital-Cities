@@ -21,7 +21,7 @@ Use `nvm use` in an already-open terminal after setup.
 
 Run `nvm use`, then check `node -v` (**24.22.1**) and `npm -v` (**11.19.1**)
 in the terminal that starts development. Start PostgreSQL with `npm run db`;
-`docker compose logs db` should report `database system is ready to accept
+`docker compose -f docker-compose.yml logs db` should report `database system is ready to accept
 connections`. Check that the root `.env` uses the matching database, credentials
 and host/port (the regular Compose service exposes `localhost:5432`).
 
@@ -53,7 +53,7 @@ Return in a standalone `npm run dev -w backend` watcher). Exhausting database
 retries does not cause an automatic retry loop. React Fast Refresh boundary
 warnings are separate from backend availability.
 
-## Optional full-stack Docker demo
+## Full-stack Docker demo
 
 For a local reviewer demo, use Docker Engine/Desktop with Docker Compose v2.
 No host Node/npm installation is needed for this option. From the repository
@@ -68,10 +68,18 @@ root, copy `.env.example` to `.env` **if you do not already have one**, then set
 - `DEMO_PORT`: optional browser port, default **8080**. For example, use
   `DEMO_PORT=8081` in `.env` if 8080 is occupied.
 
+The default `compose.yaml` starts the full stack. It takes precedence over the
+DB-only `docker-compose.yml`; the old `compose.full.yaml` name is retired. A warning
+that both supported filenames exist is expected: Compose selects `compose.yaml`
+without merging them. Use
+`npm run db` for development: its explicit `-f docker-compose.yml` selects only
+the original database and preserves the development project/volume. Commands
+such as development DB logs, exec and shutdown also need that explicit file.
+
 Start the complete stack with one command:
 
 ```bash
-docker compose -f compose.full.yaml up --build -d
+docker compose up -d
 ```
 
 Open **http://localhost:8080** (or your `DEMO_PORT`). Only that loopback browser
@@ -84,8 +92,8 @@ Node/npm versions and locked workspace dependencies; Nginx runs no Vite server.
 
 Compose sets its own `DATABASE_URL` to `db:5432` and API `PORT` to **3001**;
 the root `.env` values for these two settings still apply to npm development.
-The standard DB-only Compose file, development ports **5173/3001/5432** and
-`npm run db` / `npm run dev` commands are unchanged. Both workflows can run
+The DB-only configuration and development ports **5173/3001/5432** are unchanged;
+`npm run db` explicitly selects that file, and `npm run dev` is unchanged. Both workflows can run
 alongside each other because the demo publishes only its browser port.
 
 The separate Compose project **`map-capitals-demo`** owns the named volume
@@ -103,12 +111,14 @@ startup before marking the API unhealthy. `up -d` does not guarantee the
 frontend has completed its own first health check; inspect status and HTTP:
 
 ```bash
-docker compose -f compose.full.yaml ps -a
-docker compose -f compose.full.yaml logs --tail=100 api db frontend
+docker compose ps -a
+docker compose logs --tail=100 api db frontend
 curl -i http://localhost:8080/health
 curl -i http://localhost:8080/capital
 ```
 
+On a fresh checkout, `up -d` builds missing local images automatically. After
+source or public-token changes, use the rebuild command below.
 Fix any reported key/network/startup error, then run the start command again.
 There is no automatic restart loop. A failed import aborts startup before HTTP
 opens, so the frontend is not started on a fresh failed launch. During a later
@@ -118,13 +128,13 @@ so API container recreation does not require restarting Nginx.
 
 ```bash
 # Stop and remove this stack's containers/network; keep its database volume.
-docker compose -f compose.full.yaml down
+docker compose down
 # Start again using the existing images and persisted database.
-docker compose -f compose.full.yaml up -d
+docker compose up -d
 # Rebuild after code changes or a public Mapbox token change.
-docker compose -f compose.full.yaml up --build -d --force-recreate
+docker compose up --build -d --force-recreate
 # Restart only the API (runs the existing import again).
-docker compose -f compose.full.yaml restart api
+docker compose restart api
 ```
 
 This is a local demo without authentication/TLS or production hosting. External
@@ -133,7 +143,7 @@ required. Every API start imports again: existing matching records keep local
 edits, but deleted imported capitals can reappear. Stop/restart retains manually
 created rows. Never delete volumes as routine cleanup. Avoid printing expanded
 `docker compose config` output: it contains the runtime API key; use
-`docker compose -f compose.full.yaml config --quiet` for validation.
+`docker compose config --quiet` for validation.
 See the [Docker validation report](full-stack-docker-validation.md) for
 the real build, HTTP/CRUD, persistence, browser and failure checks and their limits.
 
@@ -146,7 +156,7 @@ Docker does not rerun init scripts on them. For an existing starter database,
 apply the schema once without resetting its volume:
 
 ```bash
-docker compose exec -T db psql -U postgres -d capitals -v ON_ERROR_STOP=1 < db/schema.sql
+docker compose -f docker-compose.yml exec -T db psql -U postgres -d capitals -v ON_ERROR_STOP=1 < db/schema.sql
 # In a devcontainer, use: docker compose -f .devcontainer/docker-compose.yml exec ...
 ```
 

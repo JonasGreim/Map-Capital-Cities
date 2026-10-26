@@ -10,8 +10,8 @@
 
 ### Short Description
 
-Explore and manage capital cities on an interactive world map, with PostgreSQL-backed
-CRUD and country information imported from REST Countries v5.
+Explore capital cities around the world on an interactive map. Discover countries
+and their capitals, search and filter locations, customize markers, and add or edit your own entries.
 
 - Interactive Mapbox world map with square 32 × 32px markers and a linked capital/country list.
 - Create, edit and delete capitals; pick coordinates on the map or restore the default dataset.
@@ -54,8 +54,9 @@ CRUD and country information imported from REST Countries v5.
 
 ### Prerequisites
 
-- Docker Engine / Docker Desktop with Docker Compose v2; no host Node/npm required.
-- A [REST Countries API key](https://restcountries.com) and a [public Mapbox token](https://account.mapbox.com).
+- Docker.
+- A [REST Countries API key](https://restcountries.com).
+- A [public Mapbox token](https://account.mapbox.com).
 
 ### Environment Variables
 
@@ -73,22 +74,20 @@ VITE_MAPBOX_TOKEN=your_public_mapbox_token
 ### Running the Application
 
 ```bash
-docker compose -f compose.full.yaml up --build -d
+docker compose up -d
 ```
 
-**Application:** <http://localhost:8080>. Stop the stack while keeping its separate demo database volume:
+**Application:** <http://localhost:8080>
 
-```bash
-docker compose -f compose.full.yaml down
-```
-
-See [Docker details](docs/development.md#optional-full-stack-docker-demo) for configuration and operation.
+See [Docker details](docs/development.md#full-stack-docker-demo) for configuration and operation.
 
 ## 🛠️ Development <a name="development"></a>
 
 ### Prerequisites
 
-- Node.js **24.22.1**, npm **11.19.1** and Docker with Compose for PostgreSQL.
+- Node.js **24.22.1**.
+- npm **11.19.1**.
+- Docker.
 
 ### Running the Development Server
 
@@ -115,9 +114,6 @@ React + Vite + Zustand ──► Fastify REST API ──► PostgreSQL
      Mapbox                REST Countries v5
 ```
 
-CRUD and reset have no authentication; use disposable demo data. Backend restarts
-can restore deleted imported capitals; see [reset and persistence limits](docs/technical-reference.md#reset-to-default).
-
 ## 🧪 Testing <a name="testing"></a>
 
 ```bash
@@ -125,9 +121,8 @@ npm run check
 npm test
 ```
 
-`check` runs ESLint, TypeScript and builds; `test` runs backend and frontend tests.
-GitHub Actions runs these checks on PRs and pushes to `main`.
-See [Testing](docs/testing.md) for separate PostgreSQL and Chromium tests; Chromium is not part of CI.
+`check` runs linting, TypeScript and builds; `test` runs backend and frontend tests.
+See [Testing](docs/testing.md) for details.
 
 ## 📖 Documentation <a name="documentation"></a>
 

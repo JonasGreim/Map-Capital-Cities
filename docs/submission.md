@@ -2,21 +2,23 @@
 
 Prepared on **26 October 2026** from GitHub `main`
 `5efea5252861aee0f4ffd11fbb58588909daec91` (includes Docker #35 and mobile #38/#39).
-This is a documentation change; application code, API, schema, dependency manifests,
-lockfile and CI configuration are unchanged. Existing validation reports remain
+Application code, API, schema, dependency versions/lockfile and CI are unchanged.
+The setup follow-up renames the full-stack file to `compose.yaml` and makes the
+`npm run db` file selection explicit; service definitions and volumes are unchanged.
+Existing validation reports remain
 historical evidence for their recorded commits; they are not fresh whole-app tests.
 
 ## Documentation migration
 
 The initial extraction reduced the README from **911 to 148 lines**; the header
-and navigation follow-up now presents the same core information in **137 lines**.
+and navigation follow-up now presents the same core information in **132 lines**.
 Entry points are Project Overview, Tech Stack, Table of Contents, Screenshots,
 Getting Started (Docker), Development (npm), Architecture, Testing and Documentation.
 
 | Previous README content | Current location |
 | --- | --- |
 | Standard development, root environment, Codespaces, watcher/startup troubleshooting | [Development](development.md#npm-development), plus concise [development setup](../README.md#development) |
-| Full-stack Docker setup, ports, volume separation, lifecycle, failures, security | [Docker operation](development.md#optional-full-stack-docker-demo) |
+| Full-stack Docker setup, ports, volume separation, lifecycle, failures, security | [Docker operation](development.md#full-stack-docker-demo) |
 | First-run SQL and existing-volume setup | [Database initialization](development.md#database-initialization) and [data model](technical-reference.md#data) |
 | REST Countries mapping, pagination, validation, transactions and restart/import limitations | [Backend/import](technical-reference.md#backend) |
 | Metadata, full route/response contracts, validation/errors and curl examples | [Capital API](technical-reference.md#capital-api) |
