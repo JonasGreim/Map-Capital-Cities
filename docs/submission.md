@@ -9,7 +9,7 @@ historical evidence for their recorded commits; they are not fresh whole-app tes
 ## Documentation migration
 
 The initial extraction reduced the README from **911 to 148 lines**; the header
-and navigation follow-up now presents the same core information in **127 lines**.
+and navigation follow-up now presents the same core information in **137 lines**.
 Entry points are Project Overview, Tech Stack, Table of Contents, Screenshots,
 Getting Started (Docker), Development (npm), Architecture, Testing and Documentation.
 
