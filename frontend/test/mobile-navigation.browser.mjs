@@ -1,3 +1,4 @@
+import { chooseContinent, continentValue } from "./continent-helpers.mjs";
 /* global window, document, innerWidth, innerHeight */
 import assert from "node:assert/strict";
 
@@ -76,7 +77,7 @@ export async function verifyMobileNavigation(page, baseURL, screenshotDirectory)
   await page.keyboard.press("End"); await focused(tab("Capitals"));
   await page.keyboard.press("Enter"); await focused(tab("Capitals"));
   await search.fill("Berlin");
-  await field("Continent").selectOption("Europe");
+  await chooseContinent(page, "Europe");
   await shot("mobile-search-390");
   for (const reducedMotion of ["no-preference", "reduce", "reduce"]) {
     await page.emulateMedia({ reducedMotion });
@@ -102,12 +103,12 @@ export async function verifyMobileNavigation(page, baseURL, screenshotDirectory)
   const flightsBeforeSwitch = await page.evaluate(() => window.mobileEvents.filter(event => event.kind === "fly").length);
   await capitals();
   assert.equal(await search.inputValue(), "Berlin");
-  assert.equal(await field("Continent").inputValue(), "Europe");
+  assert.equal(await continentValue(page), "Europe");
   await map(); await idle();
   assert.deepEqual(await page.evaluate(() => { const c = window.mobileMap.getCenter(); return [c.lng, c.lat, window.mobileMap.getZoom()]; }), camera);
   assert.equal(await button("Purple marker").getAttribute("aria-pressed"), "true");
   assert.equal(await page.evaluate(() => window.mobileEvents.filter(event => event.kind === "fly").length), flightsBeforeSwitch);
-  await capitals(); await search.fill(""); await field("Continent").selectOption("");
+  await capitals(); await search.fill(""); await chooseContinent(page, "");
   await page.locator(".list-content").evaluate(el => { el.scrollTop = 300; });
   const scroll = await page.locator(".list-content").evaluate(el => el.scrollTop);
   await map(); await capitals();

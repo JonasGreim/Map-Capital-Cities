@@ -92,11 +92,13 @@ test("known and unknown creates, country edits, deletion, reload and reset recon
   assert.equal(useCapitalStore.getState().selectedCapitalId, null);
 });
 
-test("native labeled select defaults to all continents with honest total and matching counts", () => {
+test("labeled combobox defaults to all continents with honest total and matching counts", () => {
   const html = renderToStaticMarkup(<CapitalActions><CapitalList capitals={capitals} loading={false} error={null} onRetry={async () => {}} /></CapitalActions>);
-  assert.match(html, /<label for="continent-filter">Continent<\/label><select/);
+  assert.match(html, /role="combobox" aria-labelledby="continent-label"/);
+  assert.match(html, /aria-expanded="false"/);
   assert.match(html, /All continents/);
-  assert.equal((html.match(/<option /g) ?? []).length, 8);
+  assert.match(html, /class="continent-icon"/);
+  assert.match(html, /aria-label="Reset to default" title="Reset to default"/);
   assert.match(html, /4 of 4 capitals/);
   assert.match(html, /aria-label="4 capitals"/);
 });

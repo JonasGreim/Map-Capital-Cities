@@ -1,3 +1,4 @@
+import { chooseContinent } from "./continent-helpers.mjs";
 /* global document, window, innerWidth, innerHeight, structuredClone, Event, KeyboardEvent, URL, getComputedStyle */
 import assert from "node:assert/strict";
 import { showView, viewButton } from "./view-helpers.mjs";
@@ -292,7 +293,7 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       // The active filter can exclude a confirmed country edit. Search stays
       // untouched and the hidden marker retains its instance and chosen color.
       if (collapsed) await button("Expand sidebar").click();
-      await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("Europe");
+      await showView(page, "Capitals"); await chooseContinent(page, "Europe");
       await showView(page, "Capitals"); await page.getByRole("searchbox", { includeHidden: true }).fill("Updated Berlin");
       if (collapsed) await button("Collapse sidebar").click();
       await settled();
@@ -313,7 +314,7 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       assert.deepEqual(await camera(), beforeCountry);
       if (collapsed) await button("Expand sidebar").click();
       assert.equal(await page.getByRole("searchbox", { includeHidden: true }).inputValue(), "Updated Berlin");
-      await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("");
+      await showView(page, "Capitals"); await chooseContinent(page, "");
       assert.equal(await page.locator(".capital-list li").count(), 0, "text search must remain unchanged after rename");
       await button("Clear search").click();
       assert.equal(await page.locator(".capital-name").filter({ hasText: "Tokyo copy" }).count(), 1);

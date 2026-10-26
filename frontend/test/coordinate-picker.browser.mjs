@@ -1,3 +1,4 @@
+import { chooseContinent, continentValue } from "./continent-helpers.mjs";
 /* global document, window, requestAnimationFrame, innerWidth, innerHeight */
 import assert from "node:assert/strict";
 import { showView, viewButton } from "./view-helpers.mjs";
@@ -359,7 +360,7 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
   assert.equal(writes.length, outsideWrites);
   // Context loss cancels safely into the manual form, without an inert layer.
   await showView(page, "Capitals"); await page.getByRole("searchbox", { includeHidden: true }).fill("Berlin");
-  await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("Europe");
+  await showView(page, "Capitals"); await chooseContinent(page, "Europe");
   await showView(page, "Capitals"); await button("Add capital").click();
   await field("Capital name").fill("Keep this draft");
   await field("Latitude").fill("0");
@@ -372,7 +373,7 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
   assert.deepEqual(await value(), { latitude: "0", longitude: "0" });
   await focused(field("Latitude"));
   assert.equal(await page.getByRole("searchbox", { includeHidden: true }).inputValue(), "Berlin");
-  assert.equal(await page.getByLabel("Continent", { exact: true }).inputValue(), "Europe");
+  assert.equal(await continentValue(page), "Europe");
   await page.evaluate(() => window.pickerMap.fire("webglcontextrestored"));
   assert.equal(await button("Select on map").isEnabled(), true);
   await start();

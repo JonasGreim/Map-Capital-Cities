@@ -145,6 +145,17 @@ For a real browser check after backend startup (mobile list actions use the Capi
 5. Inspect browser console errors. An intentionally mocked HTTP failure is
    expected during the error check; normal loading should have no errors.
 
+`frontend/test/sidebar-controls.browser.mjs` verifies the Variant B controls at
+1440px, 1024px, 701px, 390px and 320px, including 200% root text. It exercises all
+eight icon/label choices, keyboard navigation and typeahead, Escape/Tab/outside
+closing, touch selection, focus, popup bounds, search/clear, existing Add/Reset
+dialogs and retained search/filter/map nodes across collapse or mobile tabs.
+Run with `BROWSER_SUITES=sidebar-controls` through the runner below;
+`BROWSER_SCREENSHOT_DIR` captures the controls, dropdown and enlarged-text states.
+All capital traffic is mocked; no backend or database is started. Accessibility
+roles and focus are checked in the browser; assistive-technology announcements
+and physical-device behavior still need manual verification.
+
 `frontend/test/sidebar-rail.browser.mjs` verifies the desktop header relocation,
 64px shortcut rail, shared list/popover search, direct Add dialog, flag navigation,
 Escape/outside-click/Tab focus, repeated toggles and retained list scroll, filter,
@@ -205,7 +216,7 @@ runs exposed flights starting with the previous canvas size (1088×805 inside a
 390×464 container); arbitrary delays and relaxed camera assertions are not used.
 
 `frontend/test/continents.browser.mjs` exercises the search/continent matrix,
-native select keyboard operation, excluded selection/focus, hidden-marker safety,
+custom combobox keyboard operation, excluded selection/focus, hidden-marker safety,
 marker identity/color restoration, collapse/expand, CRUD and reset with an active
 filter, stable camera/canvas, 32×32 markers and overflow at 1440×900, 390×844 and
 320×568. It is included in `frontend/test/run-browser.mjs`; every capital API

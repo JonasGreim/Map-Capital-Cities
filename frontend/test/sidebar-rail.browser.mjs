@@ -1,3 +1,4 @@
+import { chooseContinent, continentValue } from "./continent-helpers.mjs";
 /* global window, document, innerWidth, innerHeight, getComputedStyle */
 import assert from "node:assert/strict";
 
@@ -46,7 +47,7 @@ export async function verifySidebarRail(page, baseURL, screenshotDirectory) {
     assert.equal(await page.locator("#capital-sidebar").evaluate(el => Math.round(el.getBoundingClientRect().width)), 352);
     assert.equal(await page.locator(".map-panel").evaluate(el => el.getBoundingClientRect().top === 0 && el.clientHeight === innerHeight), true);
     await search.fill("");
-    await page.getByLabel("Continent", { exact: true }).selectOption("Europe");
+    await chooseContinent(page, "Europe");
     await shot(`desktop-expanded-${width}-${height}`);
     if (width === 1440) await shot("desktop-expanded");
     await page.locator("#capital-sidebar .list-content").evaluate(el => { el.scrollTop = 200; });
@@ -103,7 +104,7 @@ export async function verifySidebarRail(page, baseURL, screenshotDirectory) {
     await focused(page.getByRole("region", { name: "Capital results" }));
     assert.equal(await page.locator("#capital-sidebar .list-content").evaluate(el => { const r = el.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; }), true);
     assert.equal(await search.inputValue(), "pRaGuE");
-    assert.equal(await page.getByLabel("Continent", { exact: true }).inputValue(), "Europe");
+    assert.equal(await continentValue(page), "Europe");
     // No selection in these toggles: the existing list's scroll must survive.
     await search.fill("");
     await page.locator("#capital-sidebar .list-content").evaluate(el => { el.scrollTop = 200; });
