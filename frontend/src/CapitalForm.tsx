@@ -76,9 +76,9 @@ export function CapitalForm({ capital, onSave, onCancel, picker }: {
               <div className={`form-field${field === "name" || field === "country" ? " capital-text-field" : ""}`} key={field}>
                 <label htmlFor={`capital-${field}`}>{label}</label>
                 <div className="capital-input">
-                  <FieldIcon field={field} />
+                  <span className="capital-input-icon" aria-hidden="true"><FieldIcon field={field} /></span>
                   <input id={`capital-${field}`} name={field} required type={field === "latitude" || field === "longitude" ? "number" : "text"}
-                  placeholder={field === "name" ? "Enter capital name" : field === "country" ? "Enter country name" : undefined}
+                  placeholder={field === "name" ? "Enter capital name" : field === "country" ? "Enter country name" : field === "latitude" ? "e.g. 48.8700" : "e.g. 2.3300"}
                   step={field === "latitude" || field === "longitude" ? "any" : undefined}
                   min={field === "latitude" ? -90 : field === "longitude" ? -180 : undefined}
                   max={field === "latitude" ? 90 : field === "longitude" ? 180 : undefined}

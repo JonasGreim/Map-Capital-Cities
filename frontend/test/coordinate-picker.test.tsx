@@ -102,7 +102,16 @@ test("add and edit share compact, labeled fields with coordinate ranges and a cl
     assert.match(markup, /aria-describedby="longitude-range"/);
     assert.match(markup, /Range: -90 to 90/);
     assert.match(markup, /Range: -180 to 180/);
-    assert.doesNotMatch(markup, /e\.g\.|Name of the capital city/);
-    if (editing) assert.match(markup, /value="12.12345678"/);
+    assert.doesNotMatch(markup, /e\.g\. (?:Paris|France)|Name of the capital city/);
+    assert.equal((markup.match(/class="capital-input-icon" aria-hidden="true"/g) ?? []).length, 4);
+    assert.match(markup, /name="latitude"[^>]*placeholder="e\.g\. 48\.8700"/);
+    assert.match(markup, /name="longitude"[^>]*placeholder="e\.g\. 2\.3300"/);
+    if (editing) {
+      assert.match(markup, /value="12.12345678"/);
+      assert.match(markup, /name="longitude"[^>]*value="-1"/);
+    } else {
+      assert.match(markup, /name="latitude"[^>]*value=""/);
+      assert.match(markup, /name="longitude"[^>]*value=""/);
+    }
   }
 });

@@ -116,14 +116,15 @@ button:disabled { opacity: 0.65; cursor: wait; }
 .capital-editor-icon { display: grid; place-items: center; flex: 0 0 2.5rem; width: 2.5rem; height: 2.5rem; border-radius: 50%; background: #deeff8; color: #264e69; }
 .capital-editor-icon svg { width: 1.5rem; height: 1.5rem; }
 .capital-editor svg:not(.coordinate-map-art) { stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.dialog-close { flex: 0 0 2.75rem; width: 2.75rem; padding: 0.6rem; border-color: transparent; color: #526774; }
-.dialog-close svg { display: block; width: 100%; height: 100%; }
+.dialog-close { display: grid; place-items: center; flex: 0 0 2.75rem; width: 2.75rem; padding: 0; border-color: transparent; color: #526774; }
+.dialog-close svg { display: block; width: 24px; height: 24px; }
 .capital-editor-description { margin: 0.6rem 0 1rem; color: #426079; font-size: 0.85rem; }
-.capital-form-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); column-gap: 1rem; }
+.capital-form-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); column-gap: 1rem; }
 .capital-text-field { grid-column: 1 / -1; }
 .capital-input { position: relative; min-width: 0; }
-.capital-input svg { position: absolute; left: 0.7rem; top: 0.75rem; width: 1.2rem; height: 1.2rem; color: #526774; pointer-events: none; }
-.capital-input input { padding-left: 2.5rem; border-color: #a3b3be; border-radius: 0.4rem; }
+.capital-input-icon { position: absolute; inset: 1px auto 1px 1px; display: grid; place-items: center; width: 2.25rem; border-right: 1px solid #a3b3be; border-radius: calc(0.4rem - 1px) 0 0 calc(0.4rem - 1px); background: #f5f7f8; color: #526774; pointer-events: none; }
+.capital-input-icon svg { display: block; width: 1.2rem; height: 1.2rem; }
+.capital-input input { display: block; padding-left: 2.8rem; border-color: #a3b3be; border-radius: 0.4rem; }
 .capital-input input::placeholder { color: #526774; opacity: 1; }
 .capital-editor .dialog-actions { padding-top: 1rem; border-top: 1px solid #dbe3e7; }
 .coordinate-picker-control { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; padding: 0.75rem; border: 1px solid #a9d6e6; border-radius: 0.5rem; background: #f0f9fd; }

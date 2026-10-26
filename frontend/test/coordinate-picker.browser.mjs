@@ -123,7 +123,7 @@ export async function verifyCoordinatePicker(page, baseURL, screenshotDirectory)
       const rect = el.getBoundingClientRect();
       return { columns: Math.abs(lat.top - lng.top) < 1, overflow: el.scrollWidth > el.clientWidth, withinViewport: rect.top >= 0 && rect.bottom <= innerHeight };
     });
-    assert.deepEqual(geometry, { columns: width > 360, overflow: false, withinViewport: true });
+    assert.deepEqual(geometry, { columns: width === 1440, overflow: false, withinViewport: true });
     await focused(field("Capital name"));
     await page.keyboard.press("Shift+Tab");
     await focused(button("Close dialog"));
