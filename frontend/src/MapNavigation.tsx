@@ -1,4 +1,4 @@
-import type mapboxgl from "mapbox-gl";
+import type { Map as MapboxMap } from "mapbox-gl";
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 
 export const DEFAULT_MAP_CAMERA = {
@@ -6,7 +6,7 @@ export const DEFAULT_MAP_CAMERA = {
 };
 
 export function MapNavigation({ map, disabled, picking }: {
-  map?: mapboxgl.Map; disabled: boolean; picking: boolean;
+  map?: MapboxMap; disabled: boolean; picking: boolean;
 }) {
   const pendingZoom = useRef<number>();
   const subscribe = useCallback((notify: () => void) => {

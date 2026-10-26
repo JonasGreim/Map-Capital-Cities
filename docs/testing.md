@@ -39,6 +39,8 @@ findings were removed by the Fastify migration and a compatible concurrently 9 u
 The [final validation report](final-validation.md) records the independently
 checked assignment requirements, fresh setup, live PostgreSQL/Mapbox results,
 remaining limitations and manual submission checklist for Issue #7.
+The later [repository cleanup audit](repository-cleanup.md) records Issue #61
+findings, validation and readiness for the final #62 acceptance pass.
 
 Repository Codex guidance is in [AGENTS.md](../AGENTS.md); use `$issue-work #N` for implementation
 and `$pr-review #N` for a read-only review. `.codex/config.toml` contains pinned,
