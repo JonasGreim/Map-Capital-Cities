@@ -13,7 +13,7 @@ const silhouettes: Record<Continent, string> = {
   "South America": "M4 2 9 3 12 6 18 8 19 11 16 14 14 15 12 19 10 22 8 20 8 15 6 12 5 8 2 5Z",
 };
 
-export function ContinentIcon({ continent }: { continent: ContinentFilter }) {
+function ContinentIcon({ continent }: { continent: ContinentFilter }) {
   return <svg className="continent-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     {continent ? <path d={silhouettes[continent]} fill="currentColor" /> : <g fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="9" /><ellipse cx="12" cy="12" rx="4" ry="9" /><path d="M3 12h18M5 7h14M5 17h14" /></g>}
   </svg>;

@@ -1,4 +1,4 @@
-import type mapboxgl from "mapbox-gl";
+import type { Map as MapboxMap, MapMouseEvent } from "mapbox-gl";
 
 export type PickedCoordinates = { latitude: string; longitude: string };
 
@@ -10,7 +10,7 @@ export function formatPickedCoordinates(latitude: number, longitude: number): Pi
 
 // Mapbox suppresses click after a drag. Accept only its canvas, never markers,
 // popup actions or controls. This listener exists only during an explicit pick.
-export function listenForCoordinates(map: mapboxgl.Map, onPick: (coordinates: PickedCoordinates) => void) {
+export function listenForCoordinates(map: MapboxMap, onPick: (coordinates: PickedCoordinates) => void) {
   const canvas = map.getCanvas();
   const cursor = canvas.style.cursor;
   canvas.style.cursor = "crosshair";
@@ -23,7 +23,7 @@ export function listenForCoordinates(map: mapboxgl.Map, onPick: (coordinates: Pi
     // while picking; a repeated cleanup must not overwrite a newer session.
     if (canvas.style.cursor === "crosshair") canvas.style.cursor = cursor;
   };
-  const click = (event: mapboxgl.MapMouseEvent) => {
+  const click = (event: MapMouseEvent) => {
     if (finished || event.originalEvent.target !== canvas) return;
     const coordinates = formatPickedCoordinates(event.lngLat.lat, event.lngLat.lng);
     if (!coordinates) return;

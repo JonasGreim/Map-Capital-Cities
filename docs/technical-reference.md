@@ -468,7 +468,8 @@ changes. The browser makes no additional country API request;
 country edits replace the flag after a successful save. Metadata refreshes only
 on backend restart, and flag images require CDN access.
 
-The native **Continent** dropdown beneath search defaults to **All continents**.
+The **Continent** combobox beneath search defaults to **All continents**.
+Its popup offers labeled continent icons, arrow-key navigation and type-ahead.
 Text search matches trimmed, case-insensitive capital/country names in the sidebar
 only. A continent filters both sidebar and map; the sidebar combines the two with
 AND. For example, Europe + Tokyo shows no list matches but keeps all European

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type mapboxgl from "mapbox-gl";
+import type { Map as MapboxMap, MapMouseEvent } from "mapbox-gl";
 import { renderToStaticMarkup } from "react-dom/server";
 import { formatPickedCoordinates, listenForCoordinates } from "../src/coordinate-picker";
 import { CapitalForm, validateCapital } from "../src/CapitalForm";
@@ -24,15 +24,15 @@ test("picked coordinates retain lat/lng order, six decimals, signs, zero and bou
 
 test("canvas clicks choose once; controls and invalid points do not; cleanup restores cursor and listener", () => {
   const canvas = { style: { cursor: "grab" } };
-  const listeners = new Set<(event: mapboxgl.MapMouseEvent) => void>();
+  const listeners = new Set<(event: MapMouseEvent) => void>();
   const map = {
     getCanvas: () => canvas,
-    on: (_type: string, listener: (event: mapboxgl.MapMouseEvent) => void) => listeners.add(listener),
-    off: (_type: string, listener: (event: mapboxgl.MapMouseEvent) => void) => listeners.delete(listener),
-  } as unknown as mapboxgl.Map;
+    on: (_type: string, listener: (event: MapMouseEvent) => void) => listeners.add(listener),
+    off: (_type: string, listener: (event: MapMouseEvent) => void) => listeners.delete(listener),
+  } as unknown as MapboxMap;
   const results: unknown[] = [];
   const click = (target: unknown, lat = 0, lng = 0) => {
-    for (const listener of listeners) listener({ originalEvent: { target }, lngLat: { lat, lng } } as mapboxgl.MapMouseEvent);
+    for (const listener of listeners) listener({ originalEvent: { target }, lngLat: { lat, lng } } as MapMouseEvent);
   };
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const dispose = listenForCoordinates(map, result => {
@@ -64,7 +64,7 @@ test("canvas clicks choose once; controls and invalid points do not; cleanup res
 
 test("cleanup is idempotent and preserves a newer tool or picking session's cursor", () => {
   const canvas = { style: { cursor: "" } };
-  const map = { getCanvas: () => canvas, on: () => {}, off: () => {} } as unknown as mapboxgl.Map;
+  const map = { getCanvas: () => canvas, on: () => {}, off: () => {} } as unknown as MapboxMap;
   const first = listenForCoordinates(map, () => {});
   first();
   const second = listenForCoordinates(map, () => {});
