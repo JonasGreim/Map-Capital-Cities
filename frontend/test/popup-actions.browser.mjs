@@ -59,7 +59,7 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
       map.flyTo = (...args) => { window.popupFlights++; return originalFly(...args); };
       const capitalMarkers =`) });
   });
-  await page.route("**/src/main.tsx", async route => {
+  await page.route("**/src/main.tsx*", async route => {
     const response = await route.fetch(), source = await response.text();
     const anchor = 'createRoot(document.getElementById("root"))';
     assert.ok(source.includes(anchor));

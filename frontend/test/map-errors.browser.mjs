@@ -12,7 +12,7 @@ export async function verifyMapErrors(page, baseURL, mode = "success") {
     assert.equal(route.request().method(), "GET");
     return route.fulfill({ json: [capital] });
   });
-  await page.route("**/src/main.tsx", async route => {
+  await page.route("**/src/main.tsx*", async route => {
     const response = await route.fetch();
     const source = await response.text();
     const root = 'createRoot(document.getElementById("root"))';
@@ -35,9 +35,10 @@ export async function verifyMapErrors(page, baseURL, mode = "success") {
     window.mapErrorTestMap = map;
     window.mapErrorTestListeners = () => Object.fromEntries([...listeners].map(([type, set]) => [type, set.size]));
   }
-  await page.route("**/src/Map.tsx", async route => {
+  await page.route("**/src/Map.tsx*", async route => {
     const response = await route.fetch();
-    const source = await response.text();
+    let source = await response.text();
+    if (mode === "no-token") source = source.replace(/const token =[^;]+;/, "const token = undefined;");
     const marker = "const failed =";
     assert.ok(source.includes(marker), "Expected the map error listener initialization");
     await route.fulfill({ response, body: source.replace(marker, `(${inspectMap.toString()})(map);\n${marker}`) });
@@ -61,8 +62,22 @@ export async function verifyMapErrors(page, baseURL, mode = "success") {
   const frame = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await page.goto(baseURL);
   await page.getByRole("button", { name: "Actions for Prague", exact: true }).waitFor();
+  const navigationDisabled = async () => {
+    for (const name of ["Zoom in", "Zoom out", "Reset map view"]) {
+      assert.equal(await page.getByRole("button", { name, exact: true }).isDisabled(), true);
+    }
+  };
+  if (mode === "no-token") {
+    await page.getByText("Map unavailable.", { exact: false }).waitFor();
+    assert.equal(await page.locator(".map-navigation").count(), 0);
+    assert.equal(await page.locator("canvas").count(), 0);
+    await page.evaluate(() => window.mapErrorTestRoot.unmount());
+    assert.deepEqual(pageErrors, []);
+    return { mode, unavailableControls: true, pageErrors };
+  }
   if (mode === "construction-error") {
     await page.getByText(unavailable, { exact: true }).waitFor();
+    await navigationDisabled();
     assert.equal(await page.evaluate(() => window.mapErrorTestMap === undefined), true);
     await page.getByRole("button", { name: "Actions for Prague", exact: true }).click();
     await page.getByRole("button", { name: "Edit", exact: true }).click();
@@ -78,6 +93,7 @@ export async function verifyMapErrors(page, baseURL, mode = "success") {
     });
     if (mode === "initial-style-error") {
       await page.getByText(resources, { exact: true }).waitFor();
+      await navigationDisabled();
       assert.equal(await page.getByText(unavailable, { exact: true }).count(), 0);
       await page.getByRole("button", { name: "Add capital", exact: true }).click();
       assert.equal(await page.getByRole("button", { name: "Select on map", exact: true }).isDisabled(), true);
@@ -93,6 +109,7 @@ export async function verifyMapErrors(page, baseURL, mode = "success") {
       window.mapErrorTestContext.loseContext();
     });
     await page.getByText(unavailable, { exact: true }).waitFor();
+    await navigationDisabled();
     await page.evaluate(() => window.mapErrorTestMap.fire("error", { error: new Error("Controlled resource error during context loss") }));
     await frame();
     assert.equal(await warning.textContent().then(text => text.trim()), unavailable);
@@ -106,6 +123,7 @@ export async function verifyMapErrors(page, baseURL, mode = "success") {
     }
     await page.waitForFunction(() => window.mapErrorTestMap.loaded());
     await warning.waitFor({ state: "hidden" });
+    assert.equal(await page.getByRole("button", { name: "Reset map view", exact: true }).isEnabled(), true);
     const canvas = await page.locator(".mapboxgl-canvas").elementHandle();
     // Generic events carry no severity; an individual tile/source error after
     // initialization must never turn the whole map into a failed-map banner.

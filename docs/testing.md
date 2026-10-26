@@ -188,6 +188,24 @@ directory must exist and should be outside the repository. Both browser fixtures
 are separate from CI and require a local frontend, Playwright tooling and Mapbox
 network access; their API mocks do not establish PostgreSQL integration.
 
+`frontend/test/map-navigation.browser.mjs` checks the top-right zoom group and
+separate camera reset at 1440px/1024px (expanded and collapsed sidebar) and
+390px/320px (mobile Map/Capitals tabs). It covers rapid clicks, zoom limits,
+Tab/Enter/Space, focus/hover, wheel/canvas keyboard navigation, reduced motion,
+and resetting pan/zoom/bearing/pitch after capital selection. Assertions retain
+the complete store object, popup, marker/canvas identities, colors, search,
+continent, style/projection and capital request count. Picking hides/disables the
+controls and retains its cursor, coordinates and form draft on selection/cancel.
+Popups use a narrower layout below 361px so their close/actions remain clear of
+the top-right controls; the existing selection suite exercises the close button.
+Run with `BROWSER_SUITES=map-navigation` and optionally `BROWSER_SCREENSHOT_DIR`
+through the runner below. Every capital request uses fixtures; Mapbox is real.
+The map-error suites additionally verify unavailable/disabled navigation during
+construction failure, initial style failure and WebGL loss/recovery, plus absent
+controls without a token (`map-errors-no-token`). These browser checks are
+separate from `npm test`; the latter includes server-rendered accessibility and
+unavailable/picking control regressions. No development database is used.
+
 `frontend/test/map-errors.browser.mjs` exports
 `verifyMapErrors(page, baseURL, mode)` for a fresh isolated Playwright Page per mode
 (`success`, `initial-style-error`, `construction-error`). It checks actual component

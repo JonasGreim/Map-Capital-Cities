@@ -4,6 +4,7 @@ import { useCapitalStore } from "./capital-store";
 import { createCapitalMarkers } from "./capital-markers";
 import { useCapitalActions } from "./CapitalActions";
 import { listenForCoordinates } from "./coordinate-picker";
+import { DEFAULT_MAP_CAMERA, MapNavigation } from "./MapNavigation";
 
 const token = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
 
@@ -11,9 +12,10 @@ export function Map({ active = true }: { active?: boolean }) {
   const visible = useRef(active);
   useLayoutEffect(() => { visible.current = active; }, [active]);
   const appliedSelection = useRef(-1);
-  const { toggleActions, closeActions, picking, preview, setMapAvailable, finishPick, cancelPick } = useCapitalActions();
+  const { toggleActions, closeActions, picking, preview, mapAvailable, setMapAvailable, finishPick, cancelPick } = useCapitalActions();
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map>();
+  const [navigationMap, setNavigationMap] = useState<mapboxgl.Map>();
   const cancelButton = useRef<HTMLButtonElement>(null);
   const [mapError, setMapError] = useState(false);
   const [resourceError, setResourceError] = useState(false);
@@ -30,7 +32,7 @@ export function Map({ active = true }: { active?: boolean }) {
     mapboxgl.accessToken = token;
     let map: mapboxgl.Map;
     try {
-      map = new mapboxgl.Map({ container: el.current, style: "mapbox://styles/mapbox/streets-v12", center: [10, 30], zoom: 1.5 });
+      map = new mapboxgl.Map({ container: el.current, style: "mapbox://styles/mapbox/streets-v12", ...DEFAULT_MAP_CAMERA });
     } catch {
       // Report an external WebGL/Mapbox construction failure without taking
       // down the independent sidebar.
@@ -48,6 +50,7 @@ export function Map({ active = true }: { active?: boolean }) {
     };
     const styled = () => {
       styleReady = true;
+      setNavigationMap(map);
       setResourceError(false);
       setMapAvailable(true);
     };
@@ -156,6 +159,7 @@ export function Map({ active = true }: { active?: boolean }) {
 
   if (!token) return <div className="map map-unavailable" role="status">Map unavailable. Set VITE_MAPBOX_TOKEN in the root .env and restart the frontend.</div>;
   return <><div className="map" ref={el} />
+    <MapNavigation map={navigationMap} disabled={!mapAvailable || mapError} picking={picking} />
     {picking && <div className="coordinate-pick-banner">
       <div role="status"><strong>Pick coordinates</strong><p>Click on the map to choose a location. Escape cancels.</p></div>
       <button ref={cancelButton} type="button" className="secondary" onClick={cancelPick}>Cancel</button>
