@@ -202,6 +202,17 @@ button:disabled { opacity: 0.65; cursor: wait; }
 .coordinate-preview { width: 22px; height: 22px; border: 5px solid #fff; border-radius: 50%; background: #007e9e; box-shadow: 0 2px 8px #12334b99, 0 0 0 2px #007e9e; pointer-events: none; }
 .map-panel { min-width: 0; min-height: 0; position: relative; background: #e6edf0; }
 .map { width: 100%; height: 100%; }
+.map-navigation { position: absolute; z-index: 2; top: 12px; right: max(12px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 10px; }
+.map-navigation[hidden] { display: none; }
+.map-zoom-group, .map-navigation .map-view-reset { border: 1px solid #cbdce5; border-radius: 0.4rem; background: #fff; box-shadow: 0 2px 6px #12334b26; }
+.map-navigation button { display: grid; place-items: center; width: 42px; height: 44px; min-height: 44px; padding: 0; border: 0; background: #fff; color: #12334b; }
+.map-zoom-group button:first-child { border-radius: calc(0.4rem - 1px) calc(0.4rem - 1px) 0 0; border-bottom: 1px solid #dbe3e7; }
+.map-zoom-group button:last-child { border-radius: 0 0 calc(0.4rem - 1px) calc(0.4rem - 1px); }
+.map-navigation .map-view-reset { width: 44px; height: 44px; }
+.map-navigation button:hover:not(:disabled) { background: #eaf1f3; color: #006e91; }
+.map-navigation button:active:not(:disabled) { background: #daedf7; }
+.map-navigation button:disabled { cursor: not-allowed; opacity: 0.5; }
+.map-navigation svg { width: 22px; height: 22px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 /* Match the attribution wrapper to its touch target. The global button minimum
    otherwise leaves part of Mapbox's 24px compact wrapper outside the map. */
 .mapboxgl-ctrl-attrib.mapboxgl-compact { min-height: 40px; padding-right: 44px; }
@@ -245,6 +256,13 @@ button:disabled { opacity: 0.65; cursor: wait; }
 .color-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px #12334b; }
 .mapboxgl-popup-close-button { top: 8px; right: 8px; display: grid; place-items: center; min-height: 40px; width: 40px; padding: 0; border: 0; border-radius: 0.6rem; background: #fff; color: #426079; font-size: 24px; }
 .mapboxgl-popup-close-button:hover { background: #eaf1f3; }
+/* Leave room for navigation beside a centered popup on the narrowest maps. */
+@media (max-width: 360px) {
+  .mapboxgl-popup { max-width: calc(100vw - 112px) !important; }
+  .capital-popup { width: calc(100vw - 114px); padding: 8px; column-gap: 8px; }
+  .capital-popup h2 { font-size: 1rem; }
+  .popup-actions-trigger { right: 52px; }
+}
 
 /* hidden preserves the mounted React/Mapbox/marker instances. */
 .map-panel[hidden] { display: none; }
