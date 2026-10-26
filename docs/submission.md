@@ -8,13 +8,14 @@ historical evidence for their recorded commits; they are not fresh whole-app tes
 
 ## Documentation migration
 
-The README changed from **911 to 148 lines**. Its entry points are Features,
-Screenshots, Tech Stack, Quick Start, Docker, Testing, and Architecture and
-Documentation. A separate table of contents would duplicate this short structure.
+The initial extraction reduced the README from **911 to 148 lines**; the header
+and navigation follow-up now presents the same core information in **127 lines**.
+Entry points are Project Overview, Tech Stack, Table of Contents, Screenshots,
+Getting Started (Docker), Development (npm), Architecture, Testing and Documentation.
 
 | Previous README content | Current location |
 | --- | --- |
-| Standard development, root environment, Codespaces, watcher/startup troubleshooting | [Development](development.md#npm-development), plus concise [Quick Start](../README.md#quick-start) |
+| Standard development, root environment, Codespaces, watcher/startup troubleshooting | [Development](development.md#npm-development), plus concise [development setup](../README.md#development) |
 | Full-stack Docker setup, ports, volume separation, lifecycle, failures, security | [Docker operation](development.md#optional-full-stack-docker-demo) |
 | First-run SQL and existing-volume setup | [Database initialization](development.md#database-initialization) and [data model](technical-reference.md#data) |
 | REST Countries mapping, pagination, validation, transactions and restart/import limitations | [Backend/import](technical-reference.md#backend) |

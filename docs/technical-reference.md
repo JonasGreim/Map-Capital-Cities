@@ -160,7 +160,7 @@ Errors from these routes have the shape `{"error":"message"}`:
 SQL errors, stack traces and credentials are never returned by the capital routes.
 `/health` keeps its existing database-backed behavior.
 
-For manual checks, first follow the [Quick Start](../README.md#quick-start),
+For manual checks, first follow the [development setup](../README.md#development),
 or run only the API with `npm run dev -w backend`. Startup still needs the schema,
 PostgreSQL and a valid REST Countries key. After the startup import completes:
 
@@ -201,7 +201,7 @@ uses Zustand as the shared source for capitals, loading and error state. Its
 `fetchCapitals` action also supports reload/retry and shares an in-flight request
 between callers, including React effect remounts, so responses cannot race.
 
-Follow the [Quick Start](../README.md#quick-start) for credentials, ports and startup.
+Follow the [development setup](../README.md#development) for credentials, ports and startup.
 
 The browser requests the same-origin relative URL `/capital`. Vite's **development**
 proxy forwards `/capital` requests to `http://127.0.0.1:3001`, using `PORT` from

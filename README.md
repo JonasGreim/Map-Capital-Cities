@@ -1,29 +1,45 @@
+<p align="right">
+  <sub>Full-Stack Take-Home Project</sub><br>
+  <a href="https://github.com/JonasGreim/Map-Capital-Cities/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/JonasGreim/Map-Capital-Cities/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status on main"></a>
+</p>
+
+<p align="center">
+  <img src="frontend/public/favicon.svg" alt="Map Capital Cities globe logo" width="100" height="100">
+</p>
+
 # Map Capital Cities
 
-Explore and manage capital cities on an interactive world map. Built as a
-full-stack take-home project, with PostgreSQL-backed CRUD and country data from
-REST Countries v5.
+## Project Overview
 
-[![CI](https://github.com/JonasGreim/Map-Capital-Cities/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/JonasGreim/Map-Capital-Cities/actions/workflows/ci.yml?query=branch%3Amain)
+Explore and manage capital cities on an interactive world map, with PostgreSQL-backed
+CRUD and country information imported from REST Countries v5.
 
-## Features
-
-- Interactive Mapbox world map with square 32 × 32px capital markers and a linked country/capital list.
-- Create, edit and delete capitals from the list or map popup; enter coordinates or pick them on the map.
+- Interactive Mapbox world map with square 32 × 32px markers and a linked capital/country list.
+- Create, edit and delete capitals; pick coordinates on the map or restore the default dataset.
 - Search the list by capital or country; filter both the list and map by continent.
 - Country flags and popup facts: continent, country population and currencies.
 - Four marker colors, saved in the current browser across reloads.
-- Responsive desktop sidebar and mobile **Map / Capitals** bottom navigation.
-- Restore the reviewed default dataset with a confirmation dialog.
+- Desktop sidebar and responsive mobile **Map / Capitals** bottom navigation.
 
-CRUD and reset have no authentication: use disposable demo data. Backend restarts
-reimport live data, so deleted imported capitals can return. See the
-[technical reference](docs/technical-reference.md#reset-to-default) for reset and persistence limits.
+### Tech Stack
+
+- **Frontend:** React 18, TypeScript, Vite 5, Zustand 4, plain CSS.
+- **Backend:** Node.js 24, Fastify 5.
+- **Database:** PostgreSQL 16.
+- **Maps & Data:** Mapbox GL JS 3, REST Countries v5.
+- **Infrastructure:** npm workspaces, Docker Compose, Nginx.
+- **Testing & Quality:** Node test runner / tsx, ESLint, TypeScript, GitHub Actions.
+
+## Table of Contents
+
+1. [Screenshots](#screenshots)
+2. [Getting Started](#getting-started)
+3. [Development](#development)
+4. [Architecture](#architecture)
+5. [Testing](#testing)
+6. [Documentation](#documentation)
 
 ## Screenshots
-
-Final screenshots will be added here: desktop map/sidebar with an open popup,
-mobile Map with bottom navigation, and mobile Capitals with search and filters.
 
 <!-- TODO: Add docs/images/desktop.png, then remove this comment wrapper.
 <img src="docs/images/desktop.png" alt="Desktop: capital list beside the world map, capital markers and an open country popup" width="960">
@@ -36,101 +52,51 @@ mobile Map with bottom navigation, and mobile Capitals with search and filters.
 </p>
 -->
 
-## Tech Stack
+Final desktop and mobile screenshots will be added here.
 
-| Area | Technology |
-| --- | --- |
-| Frontend | React 18, TypeScript, Vite 5, plain CSS |
-| State / map | Zustand 4, Mapbox GL JS 3 |
-| Backend | Node.js 24, Fastify 5, PostgreSQL client `pg` |
-| Database / external data | PostgreSQL 16, REST Countries v5 |
-| Infrastructure | npm workspaces, Docker Compose, Nginx (Docker demo) |
-| Quality | ESLint, TypeScript, Node test runner / tsx, GitHub Actions |
+## Getting Started
 
-## Quick Start
-
-### Prerequisites
-
-- **Node.js 24.22.1** and **npm 11.19.1**; commands below use [nvm](https://github.com/nvm-sh/nvm).
-- Docker with Docker Compose for PostgreSQL.
-- A [REST Countries API key](https://restcountries.com) and a [public Mapbox token](https://account.mapbox.com).
-
-### Environment
-
-From the repository root, create your local configuration once:
+Use **Docker with Docker Compose**, a [REST Countries API key](https://restcountries.com)
+and a [public Mapbox token](https://account.mapbox.com); no host Node/npm is required.
+From the repository root, create `.env` once:
 
 ```bash
 cp .env.example .env
 ```
 
-Fill in these two values in `.env`:
-
-```dotenv
-RESTCOUNTRIES_API_KEY=your_private_api_key
-VITE_MAPBOX_TOKEN=your_public_mapbox_token
-```
-
-Keep the private key server-side; only the public Mapbox token reaches the browser.
-[.env.example](.env.example) includes `DATABASE_URL` for PostgreSQL on `localhost:5432`
-and the default API `PORT=3001`. Never commit `.env`.
-
-### Start
-
-```bash
-nvm install                         # installs/selects the version in .nvmrc
-npm install --global npm@11.19.1     # nvm does not pin npm to this version
-nvm use
-npm ci
-npm run db
-npm run dev
-```
-
-- Frontend: <http://localhost:5173>
-- Backend: <http://localhost:3001>
-- DB-backed health check: <http://localhost:3001/health>
-
-PostgreSQL runs `db/schema.sql` when its storage is first initialized. The backend
-waits for PostgreSQL, imports REST Countries data, then opens the API port; Vite may
-be available earlier. Stop development before reinstalling dependencies.
-See [development and existing-database setup](docs/development.md) or the
-[startup investigation](docs/dev-startup-investigation.md) if startup fails.
-
-## Docker
-
-With the same configured `.env`, start the frontend, API and database together:
+Set `RESTCOUNTRIES_API_KEY` (private, backend only) and `VITE_MAPBOX_TOKEN` (public,
+used at frontend build time). Keep `.env` local, then start:
 
 ```bash
 docker compose -f compose.full.yaml up --build -d
 ```
 
-Open <http://localhost:8080>. The demo uses a separate persistent database volume,
-independent of the npm development database. The public Mapbox token is required
-at frontend build time; no host Node/npm installation is needed.
-
-Stop the demo while keeping its database volume:
+Open <http://localhost:8080>. Frontend, API and PostgreSQL start together; the demo
+database uses a separate persistent volume from development, retained when stopped.
 
 ```bash
 docker compose -f compose.full.yaml down
 ```
 
-See [Docker operation](docs/development.md#optional-full-stack-docker-demo) and
-[full-stack validation](docs/full-stack-docker-validation.md) for details.
+See [Docker details](docs/development.md#optional-full-stack-docker-demo) for ports, health checks and volumes.
 
-## Testing
+## Development
+
+For hot reload, use **Node.js 24.22.1**, **npm 11.19.1** and Docker for PostgreSQL.
+Use the same configured `.env` from [Getting Started](#getting-started);
+[.env.example](.env.example) includes the local database URL and default API port.
 
 ```bash
-npm run check
-npm test
+npm ci
+npm run db
+npm run dev
 ```
 
-`check` runs ESLint, TypeScript and both builds; `test` runs backend and frontend
-tests. GitHub Actions runs these checks on pull requests and pushes to `main`.
-PostgreSQL integration requires an explicitly configured isolated test database.
-Chromium browser suites exist and run separately; they are **not enabled in CI**.
-The badge reports CI status, not coverage; no automatic percentage is published.
-See [testing, browser setup and coverage status](docs/testing.md).
+Frontend: <http://localhost:5173> · API: <http://localhost:3001> · [DB health](http://localhost:3001/health).
+The backend waits for PostgreSQL and completes its import before listening, so Vite
+may be ready first. See [development and troubleshooting](docs/development.md).
 
-## Architecture and Documentation
+## Architecture
 
 ```text
 React + Vite + Zustand ──► Fastify REST API ──► PostgreSQL
@@ -139,10 +105,23 @@ React + Vite + Zustand ──► Fastify REST API ──► PostgreSQL
      Mapbox                REST Countries v5
 ```
 
-The API exposes capital list/name reads, create/update/delete, explicit reset and
-DB-backed health. Detailed contracts and behavior live in:
+CRUD and reset have no authentication; use disposable demo data. Backend restarts
+can restore deleted imported capitals; see [reset and persistence limits](docs/technical-reference.md#reset-to-default).
 
-- [Technical reference](docs/technical-reference.md): API, validation, import, schema, reset/security, UI and marker colors.
-- [Development](docs/development.md) and [testing](docs/testing.md): setup, Docker, troubleshooting, integration and browser commands.
-- [Submission checklist and documentation migration](docs/submission.md): review readiness, preserved content and remaining manual steps.
-- Validation reports: [core assignment](docs/final-validation.md), [mobile navigation](docs/mobile-navigation-validation.md), [responsive QA](docs/mobile-responsive-qa.md) and [Docker](docs/full-stack-docker-validation.md).
+## Testing
+
+```bash
+npm run check
+npm test
+```
+
+`check` runs ESLint, TypeScript and both builds; `test` runs backend and frontend tests.
+GitHub Actions runs these checks on PRs and pushes to `main`.
+Additional isolated PostgreSQL and local Chromium tests are described in [Testing](docs/testing.md); Chromium is not part of CI.
+
+## Documentation
+
+- [Technical Reference](docs/technical-reference.md): API, import, schema, reset/security and UI behavior.
+- [Development](docs/development.md): configuration, Docker operation and troubleshooting.
+- [Testing](docs/testing.md): unit, PostgreSQL, browser tests and coverage status.
+- [Submission / Validation](docs/submission.md): readiness checklist, preserved documentation and validation reports.

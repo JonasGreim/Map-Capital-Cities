@@ -1,10 +1,10 @@
 # Development and Docker
 
-[Project overview and Quick Start](../README.md#quick-start) · [Testing](testing.md)
+[Project overview and development setup](../README.md#development) · [Testing](testing.md)
 
 ## npm development
 
-Follow the [Quick Start](../README.md#quick-start) for the pinned runtime,
+Follow the [development setup](../README.md#development) for the pinned runtime,
 credentials, installation and normal startup commands. The notes below cover
 configuration, troubleshooting and Docker operation.
 
