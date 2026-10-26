@@ -10,16 +10,12 @@
 
 ### Short Description
 
-Explore capital cities around the world on an interactive map. Discover countries
-and their capitals, search and filter locations, customize markers, and add or edit your own entries.
+Explore capital cities around the world on an interactive map. Discover countries and their capitals, search and filter locations, customize markers, and add or edit your own entries.
 
-- Interactive world map with capital city markers and a linked capital/country list
-- Select a capital from the list to fly to its location and open its popup on the map
-- Create, edit and delete capitals; pick coordinates on the map or restore the default dataset
-- Search capitals and countries; filter the list and map by continent
-- Country flags and popup facts: continent, country population and currencies
-- Four marker colors, saved in the current browser across reloads
-- Desktop sidebar and mobile **Map / Capitals** bottom navigation
+- **Interactive navigation:** Search and filter capitals, then select one to fly to its location on the map
+- **Country information:** Explore flags, population, continents and currencies in interactive popups
+- **Capital management:** Create, edit and delete capitals directly in the application
+- **Responsive design:** Desktop sidebar and mobile bottom navigation
 
 ### Tech Stack
 
