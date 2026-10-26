@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useCapitalActions } from "./CapitalActions";
 import type { Capital } from "./api";
 import { useCapitalStore } from "./capital-store";
+import { Brand } from "./Brand";
+import { SidebarRail } from "./SidebarRail";
 import { CountryFlag } from "./CountryFlag";
 import { ResetCapitalsDialog } from "./ResetCapitalsDialog";
 import { continentNames, matchesContinent, type ContinentFilter } from "./continent-filter";
@@ -15,6 +17,7 @@ type CapitalListProps = {
   collapsed?: boolean;
   mobile?: boolean;
   onShowMap?: () => void;
+  onExpand?: () => void;
 };
 
 export function filterCapitals(capitals: Capital[], query: string, continent: ContinentFilter = "") {
@@ -31,7 +34,7 @@ export function centerRowInList(scroller: HTMLDivElement, row: HTMLButtonElement
   scroller.scrollTop = Math.max(0, Math.min(centered, scroller.scrollHeight - scroller.clientHeight));
 }
 
-export function CapitalList({ capitals, loading, error, onRetry, collapsed = false, mobile = false, onShowMap }: CapitalListProps) {
+export function CapitalList({ capitals, loading, error, onRetry, collapsed = false, mobile = false, onShowMap, onExpand }: CapitalListProps) {
   const results = useRef<HTMLDivElement>(null);
   const retryButton = useRef<HTMLButtonElement>(null);
   const retryPending = useRef(false);
@@ -76,7 +79,15 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
   }
 
   return (
+    <>
+      {!mobile && collapsed && <SidebarRail query={query} onQuery={setQuery} capitals={filtered} total={capitals.length} loading={loading} error={error} onRetry={onRetry}
+        onSelect={capital => selectCapital(capital.id)} onExpand={() => {
+          onExpand?.();
+          // The flag explicitly reveals the list, including in a short viewport.
+          requestAnimationFrame(() => results.current?.focus());
+        }} />}
     <aside id="capital-sidebar" className="sidebar" hidden={collapsed} role={mobile ? "tabpanel" : undefined} aria-labelledby={mobile ? "capitals-tab" : "capitals-heading"}>
+      {!mobile && <header className="app-header sidebar-brand"><Brand /></header>}
       <div className="list-heading">
         <h2 id="capitals-heading">Countries &amp; capitals</h2>
         {!loading && !error && <span className="count" aria-label={`${capitals.length} ${capitals.length === 1 ? "capital" : "capitals"}`}>{capitals.length}</span>}
@@ -154,5 +165,6 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
         if (failure) throw new Error(failure);
       }} />, document.body)}
     </aside>
+    </>
   );
 }

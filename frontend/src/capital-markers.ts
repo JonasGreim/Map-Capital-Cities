@@ -344,6 +344,13 @@ export function createCapitalMarkers(map: mapboxgl.Map, api = mapboxgl, onSelect
         if (entry.facts) updateFacts(entry.facts, capital);
         entry.actions?.setAttribute("aria-label", `Map actions for ${capital.name}`);
         if (entry.coordinates) updateCoordinates(entry.coordinates, capital);
+        // Full-height desktop maps can place the popup close to the top edge.
+        // A longer edited country/title must scroll inside its existing popup,
+        // keeping the actions reachable without moving the user's camera.
+        if (entry.content && !moved) {
+          const available = entry.content.getBoundingClientRect().bottom - map.getContainer().getBoundingClientRect().top - 8;
+          if (available > 0) entry.content.style.maxHeight = `${Math.min(parseFloat(popupMaxHeight()), available)}px`;
+        }
         if (active === entry && moved) navigate(entry);
       }
     },

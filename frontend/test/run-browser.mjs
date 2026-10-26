@@ -4,6 +4,7 @@ import { createServer } from "vite";
 import { verifyMarkerColors } from "./marker-colors.browser.mjs";
 import { verifyFlags } from "./flags.browser.mjs";
 import { verifyMapSelection } from "./map-selection.browser.mjs";
+import { verifySidebarRail } from "./sidebar-rail.browser.mjs";
 import { verifySidebar } from "./sidebar.browser.mjs";
 import { verifyContinents } from "./continents.browser.mjs";
 import { verifyReset } from "./reset.browser.mjs";
@@ -32,12 +33,12 @@ try {
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
     args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
   });
-  for (const [name, verify] of [["mobile-responsive", verifyMobileResponsive], ["mobile-navigation", verifyMobileNavigation], ["toast", verifyToast], ["coordinate-picker", verifyCoordinatePicker], ["marker-colors", verifyMarkerColors], ["branding", verifyBranding], ["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents], ["sidebar-polish", verifySidebarPolish], ["popup-actions", verifyPopupActions],
+  for (const [name, verify] of [["sidebar-rail", verifySidebarRail], ["mobile-responsive", verifyMobileResponsive], ["mobile-navigation", verifyMobileNavigation], ["toast", verifyToast], ["coordinate-picker", verifyCoordinatePicker], ["marker-colors", verifyMarkerColors], ["branding", verifyBranding], ["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents], ["sidebar-polish", verifySidebarPolish], ["popup-actions", verifyPopupActions],
     ...["success", "construction-error", "initial-style-error"].map(mode => [`map-errors-${mode}`, (page, url) => verifyMapErrors(page, url, mode)])]) {
     if (process.env.BROWSER_SUITES && !process.env.BROWSER_SUITES.split(",").includes(name)) continue;
     const context = await browser.newContext({ hasTouch: name === "popup-actions" });
     try {
-      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", ["reset", "mobile-responsive", "mobile-navigation", "toast", "coordinate-picker", "marker-colors", "sidebar-polish", "popup-actions"].includes(name) ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
+      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", ["sidebar-rail", "reset", "mobile-responsive", "mobile-navigation", "toast", "coordinate-picker", "marker-colors", "sidebar-polish", "popup-actions"].includes(name) ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
     } catch (error) {
       if (process.env.BROWSER_SCREENSHOT_DIR) {
         const page = context.pages()[0];

@@ -266,6 +266,7 @@ export async function verifyPopupActions(page, baseURL, screenshotDirectory) {
         await button("Save changes").click();
         await closed();
         assert.deepEqual(await facts(), expected);
+        assert.equal(await popupBounds(), true, "edited popup stays within the full-height map");
         assert.equal(await page.locator(".popup-country").textContent(), country);
         assert.equal(await page.locator(".popup-country img").count(), 0);
         if (code) assert.match(await page.locator(".capital-popup .country-flag img").getAttribute("src"), new RegExp(`/${code}.svg$`));
