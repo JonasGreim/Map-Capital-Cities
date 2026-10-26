@@ -95,10 +95,21 @@ wrappers. No screenshots or artificial image files were created for this change.
   authentication was unavailable; the connected GitHub API verified the exact
   base SHA and is used for publishing the feature branch/PR.
 
+## Final acceptance — Issue #62
+
+The [final QA report](final-qa.md) records fresh acceptance on 26 October 2026
+against `cdc88e3317a9bd18d23891e3f0aa1bf8ece9239a`: 153 automated tests passed
+with both PostgreSQL suites enabled, all 20 browser suites passed across two runs,
+and real Docker startup/import/CRUD/reset/persistence/recovery passed. Three
+genuine production-app screenshots now occupy the existing README positions.
+The earlier sections above remain the historical #34 evidence. Physical-device
+and screenreader checks, private GitHub rendering and reviewer access remain
+manual handoff items; see the current report for scope and tooling limitations.
+
 ## Manual handoff
 
 - [ ] Review the open PR and confirm CI for its actual head; merge remains manual.
-- [ ] Add the three final screenshots and remove their comment wrappers.
+- [x] Add the three final screenshots and remove their comment wrappers ([current QA](final-qa.md)).
 - [ ] Confirm reviewer access to the **private** repository, or prepare an archive
   without `node_modules`, `.env`, credentials, build/browser artifacts or the
   private assignment PDF. No invitation, permission or visibility change was made.
