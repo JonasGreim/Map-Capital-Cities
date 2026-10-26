@@ -1,6 +1,10 @@
 import { useRef, useState } from "react";
 import { CapitalDialog } from "./CapitalDialog";
 
+function ResetIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 6.4M3 4v7h7" /></svg>;
+}
+
 export function ResetCapitalsDialog({ onReset, onReload, onCancel }: {
   onReset: () => Promise<void>;
   onReload: () => Promise<void>;
@@ -22,7 +26,7 @@ export function ResetCapitalsDialog({ onReset, onReload, onCancel }: {
   }
   return (
     <CapitalDialog title="Reset to default" busy={busy} onClose={onCancel} className="reset-dialog" resumeFocus=".reset-cancel"
-      headerIcon={<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 6.1A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.9 5.9" /></svg>}
+      headerIcon={<ResetIcon />}
       description="This will restore all default capital names, countries and coordinates.">
       <ul className="reset-consequences">
         <li>
@@ -44,7 +48,7 @@ export function ResetCapitalsDialog({ onReset, onReload, onCancel }: {
         <button type="button" className="secondary reset-cancel" autoFocus disabled={busy} onClick={onCancel}>Cancel</button>
         {error
           ? <button type="button" disabled={busy} onClick={() => { void run(onReload); }}>Reload current data</button>
-          : <button type="button" className="reset-confirm" disabled={busy} onClick={() => { void run(onReset); }}>{busy ? "Resetting…" : "Reset capitals"}</button>}
+          : <button type="button" className="reset-confirm" disabled={busy} onClick={() => { void run(onReset); }}><ResetIcon /><span>{busy ? "Resetting…" : "Reset capitals"}</span></button>}
       </div>
       {busy && <p role="status">{error ? "Loading capitals…" : "Resetting capitals…"}</p>}
     </CapitalDialog>
