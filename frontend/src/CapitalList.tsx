@@ -7,7 +7,8 @@ import { Brand } from "./Brand";
 import { SidebarRail } from "./SidebarRail";
 import { CountryFlag } from "./CountryFlag";
 import { ResetCapitalsDialog } from "./ResetCapitalsDialog";
-import { continentNames, matchesContinent, type ContinentFilter } from "./continent-filter";
+import { matchesContinent, type ContinentFilter } from "./continent-filter";
+import { ContinentSelect } from "./ContinentSelect";
 
 type CapitalListProps = {
   capitals: Capital[];
@@ -101,18 +102,12 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
           setQuery(""); closeActions(); searchInput.current?.focus({ preventScroll: true });
         }}>×</button>}
       </div>
-      <div className="list-continent">
-        <label htmlFor="continent-filter">Continent</label>
-        <select id="continent-filter" value={continent} aria-describedby="search-results-count"
-          onChange={(event) => { setContinent(event.target.value as ContinentFilter); closeActions(); }}>
-          <option value="">All continents</option>
-          {continentNames.map(name => <option key={name} value={name}>{name}</option>)}
-        </select>
-      </div>
+      {/* Closing the pane discards only the dropdown, retaining the shared filter. */}
+      <ContinentSelect key={collapsed ? "hidden" : "visible"} value={continent} onChange={value => { setContinent(value); closeActions(); }} />
       <div className="list-actions">
-        <button id="add-capital" type="button" disabled={loading || mutating || !!error || picking} onClick={createCapital}><span aria-hidden="true">＋</span> Add capital</button>
-        <button id="reset-capitals" type="button" className="secondary" disabled={loading || mutating || !!error || picking}
-          onClick={() => { setNotice(""); closeActions(); setResetting(true); }}>Reset to default</button>
+        <button id="add-capital" type="button" disabled={loading || mutating || !!error || picking} onClick={createCapital}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4v16M4 12h16" /></svg> Add capital</button>
+        <button id="reset-capitals" type="button" className="secondary" aria-label="Reset to default" title="Reset to default" disabled={loading || mutating || !!error || picking}
+          onClick={() => { setNotice(""); closeActions(); setResetting(true); }}><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1.5 7M4 4v6h6" /></svg></button>
       </div>
       <a className="skip-to-map" href="#world-map">Skip to map</a>
       <p id="search-results-count" className={query.trim() || continent ? "search-results-count" : "visually-hidden"} role="status">

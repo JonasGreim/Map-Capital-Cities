@@ -1,8 +1,9 @@
+import { chooseContinent, continentValue } from "./continent-helpers.mjs";
 /* global document, window, performance, innerWidth, URL, structuredClone */
 import assert from "node:assert/strict";
 import { showView, viewButton } from "./view-helpers.mjs";
 
-// Real Mapbox and native controls in a fresh context. All API writes are mocked.
+// Real Mapbox and custom filter controls in a fresh context. All API writes are mocked.
 export async function verifyContinents(page, baseURL, screenshotDirectory) {
   page.setDefaultTimeout(15_000);
   const defaults = [
@@ -63,14 +64,14 @@ export async function verifyContinents(page, baseURL, screenshotDirectory) {
     });
     const select = page.getByRole("combobox", { name: "Continent", exact: true, includeHidden: true });
     const search = page.getByRole("searchbox", { includeHidden: true });
-    // Native keyboard selection: All, Africa, Antarctica, Asia, Europe.
+    // Open the listbox, then navigate All, Africa, Antarctica, Asia, Europe.
     await showView(page, "Capitals"); await select.focus();
     await page.keyboard.press("Home");
     for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
-    assert.equal(await select.inputValue(), "Europe");
+    assert.equal(await continentValue(page), "Europe");
     assert.equal(await page.evaluate(() => window.filterFlights), 0);
-    await showView(page, "Capitals"); await select.selectOption("");
+    await showView(page, "Capitals"); await chooseContinent(page, "");
     await showView(page, "Capitals"); await button("Show Berlin, Germany on map").click();
     await showView(page, "Map"); await button("Red marker").click();
     await page.waitForFunction(() => window.filterMap && !window.filterMap.isMoving());
@@ -85,7 +86,7 @@ export async function verifyContinents(page, baseURL, screenshotDirectory) {
     assert.deepEqual(await camera(), before);
     await showView(page, "Capitals"); await search.fill("");
 
-    await showView(page, "Capitals"); await select.selectOption("Europe");
+    await showView(page, "Capitals"); await chooseContinent(page, "Europe");
     assert.deepEqual(await sidebarNames(), ["Berlin", "Ankara"]);
     assert.equal(await visibleMarkers().count(), 2);
     await showView(page, "Capitals"); await search.fill("Tokyo");
@@ -95,7 +96,7 @@ export async function verifyContinents(page, baseURL, screenshotDirectory) {
     assert.equal((await state()).selectedCapitalId, 1);
     assert.deepEqual(await camera(), before);
     await showView(page, "Capitals"); await select.focus();
-    await showView(page, "Capitals"); await select.selectOption("Asia");
+    await showView(page, "Capitals"); await chooseContinent(page, "Asia");
     assert.deepEqual(await sidebarNames(), ["Tokyo"]);
     assert.equal(await visibleMarkers().count(), 2);
     assert.equal(await page.locator(".mapboxgl-popup").count(), 0);
@@ -112,7 +113,7 @@ export async function verifyContinents(page, baseURL, screenshotDirectory) {
     assert.deepEqual((await state()).capitals, defaults);
 
     await showView(page, "Capitals"); await search.fill("");
-    for (const value of ["Europe", "Asia", "Europe", ""]) { await showView(page, "Capitals"); await select.selectOption(value); }
+    for (const value of ["Europe", "Asia", "Europe", ""]) { await showView(page, "Capitals"); await chooseContinent(page, value); }
     assert.equal(await visibleMarkers().count(), 4);
     assert.equal(await page.evaluate(() => window.filterMarkers.every((el, i) => el === document.querySelectorAll(".capital-marker")[i])), true);
     assert.equal(await hiddenBerlin.evaluate(el => el.style.backgroundColor), "rgb(180, 35, 24)");
@@ -127,7 +128,7 @@ export async function verifyContinents(page, baseURL, screenshotDirectory) {
     assert.equal(await hiddenBerlin.evaluate(el => el === document.activeElement), true);
 
     // Country edit hides the selected marker but retains its instance/color.
-    await showView(page, "Capitals"); await select.selectOption("Europe");
+    await showView(page, "Capitals"); await chooseContinent(page, "Europe");
     await showView(page, "Capitals"); await button("Show Berlin, Germany on map").click();
     await showView(page, "Capitals"); await button("Actions for Berlin").click();
     await button("Edit").click();
@@ -137,9 +138,9 @@ export async function verifyContinents(page, baseURL, screenshotDirectory) {
     assert.equal(await visibleMarkers().count(), 1);
     assert.equal((await state()).selectedCapitalId, null);
     assert.equal(await page.locator(".mapboxgl-popup").count(), 0);
-    await showView(page, "Capitals"); await select.selectOption("");
+    await showView(page, "Capitals"); await chooseContinent(page, "");
     assert.equal(await page.locator('.capital-marker[aria-label^="Berlin,"]').evaluate(el => el.style.backgroundColor), "rgb(180, 35, 24)");
-    await showView(page, "Capitals"); await select.selectOption("Europe");
+    await showView(page, "Capitals"); await chooseContinent(page, "Europe");
 
     for (const [name, country, shown] of [["Known city", "Germany", true], ["Unknown city", "Atlantis", false]]) {
       await showView(page, "Capitals"); await button("Add capital").click();
@@ -164,13 +165,13 @@ export async function verifyContinents(page, baseURL, screenshotDirectory) {
     await showView(page, "Capitals"); await button("Reset to default").click();
     await button("Reset capitals").click();
     await page.getByRole("dialog").waitFor({ state: "hidden" });
-    assert.equal(await select.inputValue(), "Europe");
+    assert.equal(await continentValue(page), "Europe");
     assert.equal(await search.inputValue(), "Berlin");
     assert.deepEqual(await sidebarNames(), ["Berlin"]);
     assert.equal(await visibleMarkers().count(), 2);
     assert.deepEqual(await camera(), beforeReset);
     await showView(page, "Capitals"); await search.fill("");
-    await showView(page, "Capitals"); await select.selectOption("");
+    await showView(page, "Capitals"); await chooseContinent(page, "");
     assert.equal(await visibleMarkers().count(), 4);
     await showView(page, "Map");
     assert.equal(await page.locator(".capital-marker").evaluateAll(elements => elements.every(el => el.offsetWidth === 32 && el.offsetHeight === 32 && el.style.backgroundColor === "rgb(33, 98, 120)")), true);

@@ -1,3 +1,4 @@
+import { chooseContinent } from "./continent-helpers.mjs";
 /* global document, window, localStorage, sessionStorage, Storage, innerWidth, URL */
 import assert from "node:assert/strict";
 import { showView, viewButton } from "./view-helpers.mjs";
@@ -114,10 +115,9 @@ export async function verifyMarkerColors(page, baseURL, screenshotDirectory) {
       window.originalColorMarkers = [...document.querySelectorAll(".capital-marker")];
     });
     const view = await camera();
-    const continent = page.getByRole("combobox", { name: "Continent", includeHidden: true });
-    await showView(page, "Capitals"); await continent.selectOption("Asia");
+    await showView(page, "Capitals"); await chooseContinent(page, "Asia");
     assert.equal(await marker(1).isHidden(), true);
-    await showView(page, "Capitals"); await continent.selectOption("");
+    await showView(page, "Capitals"); await chooseContinent(page, "");
     const search = page.getByRole("searchbox", { includeHidden: true });
     await showView(page, "Capitals"); await search.fill("Tokyo");
     assert.equal(await color(1), "rgb(180, 35, 24)");
@@ -187,7 +187,7 @@ export async function verifyMarkerColors(page, baseURL, screenshotDirectory) {
       await reload();
       await open(1); await swatch("Red");
       await button("Close popup").click();
-      await showView(page, "Capitals"); await continent.selectOption("Asia"); await showView(page, "Capitals"); await continent.selectOption("");
+      await showView(page, "Capitals"); await chooseContinent(page, "Asia"); await showView(page, "Capitals"); await chooseContinent(page, "");
       await open(1);
       assert.equal(await button("Red marker").getAttribute("aria-pressed"), "true");
       assert.equal(await color(1), "rgb(180, 35, 24)");

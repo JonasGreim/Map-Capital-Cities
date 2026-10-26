@@ -1,3 +1,4 @@
+import { chooseContinent, continentValue } from "./continent-helpers.mjs";
 /* global window, document, innerWidth, innerHeight, getComputedStyle */
 import assert from "node:assert/strict";
 import { showView } from "./view-helpers.mjs";
@@ -140,13 +141,13 @@ export async function verifyMobileResponsive(page, baseURL, screenshotDirectory)
   // Reduced viewport simulates keyboard space, not native iOS/Android behavior.
   await resize(390,844); await showView(page,"Capitals");
   const search = page.getByRole("searchbox");
-  await search.fill("Berlin"); await page.getByLabel("Continent", { exact: true }).selectOption("Europe"); await shot("responsive-search-390");
+  await search.fill("Berlin"); await chooseContinent(page, "Europe"); await shot("responsive-search-390");
   await resize(390,400); await search.focus(); await search.scrollIntoViewIfNeeded(); await reachable(search);
   await reachable(button("Clear search")); await button("Clear search").click();
   assert.equal(await search.evaluate(el => el === document.activeElement), true);
   await showView(page,"Map"); await showView(page,"Capitals");
-  assert.equal(await search.inputValue(), ""); assert.equal(await page.getByLabel("Continent", { exact: true }).inputValue(), "Europe");
-  await shell(); await shot("responsive-keyboard-390-400"); await page.getByLabel("Continent", { exact: true }).selectOption("");
+  assert.equal(await search.inputValue(), ""); assert.equal(await continentValue(page), "Europe");
+  await shell(); await shot("responsive-keyboard-390-400"); await chooseContinent(page, "");
   await resize(320,568); await button("Add capital").click(); await button("Create capital").click();
   assert.equal(await page.getByLabel("Capital name",{exact:true}).getAttribute("aria-invalid"), "true");
   await reachable(page.getByLabel("Capital name",{exact:true})); await shot("responsive-create-320");

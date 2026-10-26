@@ -1,3 +1,4 @@
+import { chooseContinent, continentValue } from "./continent-helpers.mjs";
 /* global document, window, innerWidth, innerHeight, getComputedStyle, KeyboardEvent, Event, structuredClone */
 import assert from "node:assert/strict";
 import { showView, viewButton } from "./view-helpers.mjs";
@@ -138,9 +139,9 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
     await menu.waitFor({ state: "hidden" });
     await page.setViewportSize({ width, height });
     await showView(page, "Capitals"); await button("Actions for Berlin").click();
-    await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("Asia");
+    await showView(page, "Capitals"); await chooseContinent(page, "Asia");
     assert.equal(await menu.count(), 0);
-    await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("");
+    await showView(page, "Capitals"); await chooseContinent(page, "");
     await showView(page, "Capitals"); await button("Actions for Berlin").click();
     await button("Collapse sidebar").click();
     assert.equal(await menu.count(), 0);
@@ -177,7 +178,7 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
     await activateMarker(16);
     assert.equal(await page.locator("#capital-sidebar").isVisible(), false);
     await button("Expand sidebar").click();
-    await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("Europe");
+    await showView(page, "Capitals"); await chooseContinent(page, "Europe");
     await showView(page, "Map");
     // Resizing the map may still fit the taller popup through ResizeObserver.
     // Finish that existing layout work before measuring search-only behavior.
@@ -201,10 +202,10 @@ export async function verifySidebarPolish(page, baseURL, screenshotDirectory) {
     await page.keyboard.press("Enter");
     await focus(search);
     assert.equal(await search.inputValue(), "");
-    assert.equal(await page.getByLabel("Continent", { exact: true }).inputValue(), "Europe");
+    assert.equal(await continentValue(page), "Europe");
     assert.deepEqual(await camera(), filteredView);
     assert.deepEqual(await page.locator(".capital-marker").evaluateAll(elements => elements.map(el => [el.hidden, el.getAttribute("aria-pressed"), el.style.backgroundColor])), markerState);
-    await showView(page, "Capitals"); await page.getByLabel("Continent", { exact: true }).selectOption("");
+    await showView(page, "Capitals"); await chooseContinent(page, "");
     // Menus/dialogs never request list-to-map navigation.
     const beforeActions = await camera();
     await showView(page, "Capitals"); await button("Actions for Berlin").click();
