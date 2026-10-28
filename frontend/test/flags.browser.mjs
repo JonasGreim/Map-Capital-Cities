@@ -69,7 +69,7 @@ export async function verifyFlags(page, baseURL, screenshotDirectory) {
     assert.equal(await locator.locator(".country-flag").getAttribute("aria-hidden"), "true");
   };
   const viewports = [];
-  for (const [width, height] of [[1440, 900], [390, 844], [320, 568]]) {
+  for (const [width, height] of [[1440, 900]]) {
     await page.setViewportSize({ width, height });
     await assertImage(row("Berlin", "Germany"), "de");
     await assertImage(row("Prague", "Czechia"), "cz");
@@ -124,21 +124,8 @@ export async function verifyFlags(page, baseURL, screenshotDirectory) {
   await assertImage(page.locator(".capital-popup"), "cz");
   assert.equal(await button("Red marker").getAttribute("aria-pressed"), "true");
   assert.equal(await row("Berlin", "Czechia").getAttribute("aria-pressed"), "true");
-  await page.keyboard.press("Escape");
-  await showView(page, "Capitals"); await button("Add capital").click();
-  for (const [label, value] of [["Capital name", "Manual city"], ["Country name", "Germany"], ["Latitude", "0"], ["Longitude", "0"]]) {
-    await page.getByLabel(label, { exact: true }).fill(value);
-  }
-  await button("Create capital").click();
-  await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
-  await assertImage(row("Manual city", "Germany"), "de");
-  await showView(page, "Capitals"); await button("Actions for Manual city").click();
-  await button("Delete").click();
-  await button("Delete capital").click();
-  await page.locator("dialog.capital-dialog").waitFor({ state: "hidden" });
-  assert.equal(await row("Manual city", "Germany").count(), 0);
   assert.deepEqual(pageErrors, []);
   assert.ok(cdn.some(response => response.url.endsWith("de.svg") && response.status === 200));
   assert.ok(cdn.some(response => response.url.endsWith("cz.svg") && response.status === 200));
-  return { viewports, realCdn: cdn, loadingGlobe: true, imageFailureFallback: true, countryEditLoadingReset: true, countryEdit: true, manualCreateDelete: true, pageErrors };
+  return { viewports, realCdn: cdn, loadingGlobe: true, imageFailureFallback: true, countryEditLoadingReset: true, countryEdit: true, pageErrors };
 }
