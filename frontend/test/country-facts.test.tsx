@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createCapital, getCapitals, resetCapitals, updateCapital } from "../src/api";
 import { countryFacts, readPopulation, readCurrencies } from "../src/country-facts";
 
-const berlin = { id: 1, name: "Berlin", country: "Germany", latitude: 52.52, longitude: 13.405 };
 const facts = { continents: ["Europe"], population: 83200000, currencies: [{ code: "EUR", name: "Euro" }] };
 
 test("country populations format consistently without rounding and missing facts use neutral text", () => {
@@ -32,28 +30,4 @@ test("all continents/currencies are retained as text; long names, invalid entrie
     assert.equal(readCurrencies(value), null);
     assert.equal(countryFacts({ currencies: value })[2][1], "—");
   }
-});
-
-test("list/create/update/reset normalize optional facts without changing required fields or mutation inputs", async t => {
-  const mock = t.mock.method(globalThis, "fetch", (async () => Response.json([])) as typeof fetch);
-  for (const metadata of [facts, { population: 0, currencies: [{ code: "JPY" }] },
-    { population: "42", currencies: { EUR: {} } }, { population: -1, currencies: [null, { code: "bad" }] }, {}]) {
-    const row = { ...berlin, ...metadata };
-    mock.mock.mockImplementation(async () => Response.json([row]));
-    for (const capital of [(await getCapitals())[0], (await resetCapitals())[0]]) {
-      assert.equal(capital.name, berlin.name);
-      assert.equal(capital.population ?? null, readPopulation(metadata.population));
-      assert.deepEqual(capital.currencies ?? null, readCurrencies(metadata.currencies));
-    }
-    mock.mock.mockImplementation(async () => Response.json(row));
-    for (const capital of [await createCapital({ ...berlin, ...facts }), await updateCapital(1, { ...berlin, ...facts })]) {
-      assert.equal(capital.population ?? null, readPopulation(metadata.population));
-      assert.deepEqual(capital.currencies ?? null, readCurrencies(metadata.currencies));
-    }
-    for (const call of mock.mock.calls.slice(-2)) {
-      assert.deepEqual(Object.keys(JSON.parse(String(call.arguments[1]?.body))).sort(), ["country", "latitude", "longitude", "name"]);
-    }
-  }
-  mock.mock.mockImplementation(async () => Response.json([{ ...berlin, latitude: "52.52", ...facts }]));
-  await assert.rejects(getCapitals(), /invalid response/);
 });

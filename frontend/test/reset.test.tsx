@@ -4,12 +4,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { resetCapitals } from "../src/api";
 import { useCapitalStore } from "../src/capital-store";
 import { ResetCapitalsDialog } from "../src/ResetCapitalsDialog";
-import { CapitalActions } from "../src/CapitalActions";
-import { CapitalList } from "../src/CapitalList";
 
 const berlin = { id: 1, name: "Berlin", country: "Germany", latitude: 52.52, longitude: 13.405 };
 const restored = { ...berlin, id: 100, flagCode: "DE" };
-afterEach(() => useCapitalStore.setState({ capitals: [], loading: false, error: null, mutating: false, selectedCapitalId: null, resetVersion: 0 }));
+afterEach(() => useCapitalStore.setState(useCapitalStore.getInitialState(), true));
 
 test("reset POST sends only explicit confirmation and reads validated capitals", async (t) => {
   const timeout = t.mock.method(AbortSignal, "timeout", () => new AbortController().signal);
@@ -54,7 +52,7 @@ test("pending reset prevents double submit, CRUD and overlapping reads", async (
   await assert.rejects(useCapitalStore.getState().resetCapitals(), /Please wait/);
 });
 
-test("HTTP/network/invalid response failures preserve data, selection and colors with no retry", async (t) => {
+test("HTTP/network/invalid response failures preserve data, selection and reset version with no retry", async (t) => {
   for (const failure of [500, 409, "network", "invalid", "empty", "duplicates"]) {
     useCapitalStore.setState({ capitals: [berlin], selectedCapitalId: 1 });
     const fetch = t.mock.method(globalThis, "fetch", async () => {
@@ -75,35 +73,15 @@ test("HTTP/network/invalid response failures preserve data, selection and colors
   }
 });
 
-test("sidebar replaces refresh with adjacent reset; opening confirmation performs no write", () => {
-  let writes = 0;
-  const operation = async () => { writes++; };
-  const sidebar = renderToStaticMarkup(<CapitalActions><CapitalList capitals={[berlin]} loading={false} error={null} onRetry={operation} /></CapitalActions>);
-  assert.match(sidebar, /Add capital<\/button><button id="reset-capitals"/);
-  assert.doesNotMatch(sidebar, /Refresh list/);
-  const dialog = renderToStaticMarkup(<ResetCapitalsDialog onReset={operation} onReload={operation} onCancel={() => {}} />);
-  assert.match(dialog, /All manually added capitals will be <strong>deleted\.<\/strong>/);
-  assert.match(dialog, /shared demo data for everyone/);
-  assert.match(dialog, /<strong>teal<\/strong> in this browser/);
-  assert.match(dialog, /autofocus=""[^>]*>Cancel/);
-  assert.equal(writes, 0);
-});
-
-test("reset dialog presents exactly three consequences, shared-data warning and accessible header", () => {
-  const markup = renderToStaticMarkup(<ResetCapitalsDialog onReset={async () => {}} onReload={async () => {}} onCancel={() => {}} />);
-  const copy = markup.replace(/<[^>]+>/g, "");
-  assert.match(markup, /class="capital-dialog capital-editor reset-dialog"/);
-  assert.match(markup, /aria-labelledby="dialog-title" aria-busy="false" aria-describedby="dialog-description"/);
-  assert.match(markup, /aria-label="Close dialog"/);
-  assert.match(copy, /This will restore all default capital names, countries and coordinates\./);
-  const consequences = [...markup.matchAll(/<li>(.*?)<\/li>/g)].map(row => row[1].replace(/<[^>]+>/g, ""));
-  assert.deepEqual(consequences, [
-    "All manually added capitals will be deleted.",
-    "Deleted default capitals will return.",
-    "Marker colors will return to teal in this browser.",
-  ]);
-  assert.equal((markup.match(/class="reset-consequence-icon" aria-hidden="true"/g) ?? []).length, 3);
-  assert.match(markup, /This changes the shared demo data for everyone and <strong>cannot be undone\.<\/strong>/);
-  assert.doesNotMatch(copy, /IDs|selection|popup|session/);
-  assert.match(markup, /class="reset-confirm"/);
+test("reset confirmation exposes an accessible destructive/shared-data warning and safe default", () => {
+  const html = renderToStaticMarkup(<ResetCapitalsDialog onReset={async () => {}} onReload={async () => {}} onCancel={() => {}} />);
+  assert.match(html, /<dialog[^>]*aria-labelledby="dialog-title"/);
+  assert.match(html, /aria-describedby="dialog-description"/);
+  assert.match(html, /aria-label="Close dialog"/);
+  const text = html.replace(/<[^>]+>/g, "");
+  assert.match(text, /manually added capitals.*deleted/);
+  assert.match(text, /Deleted default capitals.*return/);
+  assert.match(text, /Marker colors.*teal.*this browser/);
+  assert.match(text, /shared demo data for everyone.*cannot be undone/);
+  assert.match(html, /<button[^>]*autofocus=""[^>]*>Cancel<\/button>/);
 });

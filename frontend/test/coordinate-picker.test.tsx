@@ -3,7 +3,7 @@ import { test } from "node:test";
 import type { Map as MapboxMap, MapMouseEvent } from "mapbox-gl";
 import { renderToStaticMarkup } from "react-dom/server";
 import { formatPickedCoordinates, listenForCoordinates } from "../src/coordinate-picker";
-import { CapitalForm, validateCapital } from "../src/CapitalForm";
+import { CapitalForm } from "../src/CapitalForm";
 
 test("picked coordinates retain lat/lng order, six decimals, signs, zero and boundaries", () => {
   for (const [lat, lng, latitude, longitude] of [
@@ -15,7 +15,6 @@ test("picked coordinates retain lat/lng order, six decimals, signs, zero and bou
   ] as const) {
     const coordinates = formatPickedCoordinates(lat, lng)!;
     assert.deepEqual(coordinates, { latitude, longitude });
-    assert.deepEqual(validateCapital({ name: "Draft", country: "Country", ...coordinates }).errors, {});
   }
   for (const [lat, lng] of [[NaN, 0], [0, Infinity], [-Infinity, 0], [90.000001, 0], [-91, 0], [0, 181], [0, -180.000001]]) {
     assert.equal(formatPickedCoordinates(lat, lng), null);
@@ -78,40 +77,11 @@ test("cleanup is idempotent and preserves a newer tool or picking session's curs
 });
 
 test("map picking is a secondary non-submit action with an explained manual fallback", () => {
-  const picker = { available: true, active: false, start: () => assert.fail("Rendering must not start a pick"), clearPreview: () => {} };
-  const render = (available: boolean) => renderToStaticMarkup(<CapitalForm picker={{ ...picker, available }} onSave={async () => assert.fail("Rendering must not save")} onCancel={() => {}} />);
-  assert.match(render(true), /id="pick-on-map" type="button" class="secondary pick-on-map"/);
+  const picker = { available: true, active: false, start: () => {}, clearPreview: () => {} };
+  const render = (available: boolean) => renderToStaticMarkup(<CapitalForm picker={{ ...picker, available }} onSave={async () => {}} onCancel={() => {}} />);
+  assert.match(render(true), /<button[^>]*id="pick-on-map"[^>]*type="button"/);
   assert.match(render(false), /disabled="" aria-describedby="pick-unavailable"/);
   assert.match(render(false), /Enter coordinates manually/);
   assert.match(render(true), /Select on map<\/button>/);
   assert.match(render(true), /aria-describedby="pick-description"/);
-});
-
-test("add and edit share compact, labeled fields with coordinate ranges and a close action", () => {
-  const render = (editing: boolean) => renderToStaticMarkup(<CapitalForm
-    capital={editing ? { id: 1, name: "Draft", country: "Country", latitude: 12.12345678, longitude: -1 } : undefined}
-    onSave={async () => {}} onCancel={() => {}} />);
-  for (const editing of [false, true]) {
-    const markup = render(editing);
-    assert.match(markup, editing ? /Edit Capital City/ : /Add a New Capital City/);
-    assert.match(markup, /aria-label="Close dialog"/);
-    assert.match(markup, /aria-describedby="dialog-description"/);
-    assert.match(markup, /aria-hidden="true"/);
-    assert.match(markup, /name="latitude"[^>]*type="number"[^>]*step="any"[^>]*min="-90"[^>]*max="90"/);
-    assert.match(markup, /aria-describedby="latitude-range"/);
-    assert.match(markup, /aria-describedby="longitude-range"/);
-    assert.match(markup, /Range: -90 to 90/);
-    assert.match(markup, /Range: -180 to 180/);
-    assert.doesNotMatch(markup, /e\.g\. (?:Paris|France)|Name of the capital city/);
-    assert.equal((markup.match(/class="capital-input-icon" aria-hidden="true"/g) ?? []).length, 4);
-    assert.match(markup, /name="latitude"[^>]*placeholder="e\.g\. 48\.8700"/);
-    assert.match(markup, /name="longitude"[^>]*placeholder="e\.g\. 2\.3300"/);
-    if (editing) {
-      assert.match(markup, /value="12.12345678"/);
-      assert.match(markup, /name="longitude"[^>]*value="-1"/);
-    } else {
-      assert.match(markup, /name="latitude"[^>]*value=""/);
-      assert.match(markup, /name="longitude"[^>]*value=""/);
-    }
-  }
 });

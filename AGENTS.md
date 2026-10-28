@@ -26,12 +26,28 @@
   profile when practical; missing browser tools must not block static checks.
 - Never perform destructive database operations without explicit approval.
 
+## Testing
+
+- Add tests only for a credible regression risk; explain the added protection in
+  the PR. Check existing scenarios first and extend/consolidate their owner.
+- Test observable behavior and important contracts, not implementation details.
+  Choose the smallest reliable unit/API/DB/browser boundary; duplicate a layer
+  only for a distinct transport or lifecycle risk.
+- Prefer simple fixtures/mocks. Avoid source manipulation, fragile CSS/HTML
+  string assertions, needless matrices and artificial test-count/coverage goals.
+- Explicitly selected disposable test databases may be recreated without an
+  extra backup; never select a production, shared or unrelated database. Other
+  destructive database operations still require explicit approval.
+- Use `$test-audit` when creating, changing, reviewing or consolidating tests,
+  including frontend units, browser tests (#74) and backend tests (#75).
+
 ## Agent Skills
 
 - `$issue-work` — GitHub issue implementation through an open PR.
 - `$pr-review` — Independent PR or local-diff review.
 - `$impeccable` — UI audit, critique and polish.
 - `$web-design-guidelines` — Accessibility, usability and responsive design.
+- `$test-audit` — Test authoring gates, regression value and consolidation review.
 - `$fastify-http` — Fastify routes, validation and HTTP contracts.
 
 Load only skills relevant to the current task.

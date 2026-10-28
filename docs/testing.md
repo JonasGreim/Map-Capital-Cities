@@ -122,6 +122,18 @@ Adding a public upload, external service, token or write-enabled publication job
 would exceed this documentation change. The native Actions badge therefore shows
 CI status only; no manually maintained percentage or test-count badge is used.
 
+## Frontend test ownership
+
+Use `$test-audit` for test authoring, changes and reviews; the short rules live in
+[AGENTS.md](../AGENTS.md). The [Issue #73 audit](frontend-test-audit.md) records the
+baseline declaration ledger, consolidation decisions and preservation evidence.
+`api.test.tsx` owns loading transport/validation, `api-metadata.test.tsx` owns optional
+response metadata, `loading.test.tsx` owns shared-request/retry transitions and
+`list.test.tsx` owns initial list semantics and search. Mutation, selection,
+filter, storage and marker-controller suites retain their distinct lifecycle
+contracts. `storage-fixture.ts` supplies only the shared in-memory Storage double.
+Native layout/keyboard/Mapbox behavior belongs to the browser suites below.
+
 ## Frontend and browser verification
 
 The header brand is a native home link to `/`; it reloads the app and restores its

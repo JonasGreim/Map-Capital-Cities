@@ -3,7 +3,7 @@ import { afterEach, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CapitalActions } from "../src/CapitalActions";
 import { CapitalList, filterCapitals } from "../src/CapitalList";
-import { createCapital, getCapitals, resetCapitals, updateCapital, type Capital } from "../src/api";
+import type { Capital } from "../src/api";
 import { matchesContinent, type ContinentFilter } from "../src/continent-filter";
 import { useCapitalStore } from "../src/capital-store";
 
@@ -12,7 +12,7 @@ const tokyo: Capital = { id: 2, name: "Tokyo", country: "Japan", latitude: 35.68
 const ankara: Capital = { id: 3, name: "Ankara", country: "Turkey", latitude: 39.93, longitude: 32.86, continents: ["Asia", "Europe"] };
 const unknown: Capital = { id: 4, name: "Unknown", country: "Unknown", latitude: 0, longitude: 0 };
 const capitals = [berlin, tokyo, ankara, unknown];
-afterEach(() => useCapitalStore.setState({ continent: "", capitals: [], selectedCapitalId: null, loading: false, mutating: false, error: null, resetVersion: 0 }));
+afterEach(() => useCapitalStore.setState(useCapitalStore.getInitialState(), true));
 
 test("search and continent matrix derives independent sidebar and map results without mutating data", () => {
   const snapshot = structuredClone(capitals);
@@ -26,27 +26,6 @@ test("search and continent matrix derives independent sidebar and map results wi
     assert.deepEqual(capitals.filter(c => matchesContinent(c, continent)).map(c => c.id), markers);
   }
   assert.deepEqual(capitals, snapshot);
-});
-
-test("API treats malformed or missing metadata as unknown on list, create, edit and reset", async (t) => {
-  const mock = t.mock.method(globalThis, "fetch", (async () => Response.json([])) as typeof fetch);
-  for (const continents of [undefined, null, [], "Europe", [null], ["Europe", "Atlantis"], [42]]) {
-    const row = { ...berlin, continents };
-    mock.mock.mockImplementation(async () => Response.json([row]));
-    const [capital] = await getCapitals();
-    assert.equal(matchesContinent(capital, "Europe"), false);
-    assert.equal(matchesContinent(capital, ""), true);
-  }
-  const row = { ...berlin, continents: [" europe ", "ASIA", "Europe"] };
-  mock.mock.mockImplementation(async (_url, options) => Response.json(options?.method === "POST" ? [row] : row));
-  const expected = ["Asia", "Europe"];
-  assert.deepEqual((await resetCapitals())[0].continents, expected);
-  mock.mock.mockImplementation(async () => Response.json(row));
-  assert.deepEqual((await createCapital(berlin)).continents, expected);
-  assert.deepEqual((await updateCapital(berlin.id, berlin)).continents, expected);
-  for (const call of mock.mock.calls.slice(-2)) {
-    assert.deepEqual(Object.keys(JSON.parse(String(call.arguments[1]?.body))).sort(), ["country", "latitude", "longitude", "name"]);
-  }
 });
 
 test("continent selection retains canonical data and clears only an excluded selection", () => {
@@ -97,8 +76,6 @@ test("labeled combobox defaults to all continents with honest total and matching
   assert.match(html, /role="combobox" aria-labelledby="continent-label"/);
   assert.match(html, /aria-expanded="false"/);
   assert.match(html, /All continents/);
-  assert.match(html, /class="continent-icon"/);
-  assert.match(html, /aria-label="Reset to default" title="Reset to default"/);
   assert.match(html, /4 of 4 capitals/);
   assert.match(html, /aria-label="4 capitals"/);
 });
