@@ -23,6 +23,7 @@ test("GET /health does not report success when the database is unavailable", asy
 
   assert.equal(response.statusCode, 500);
   assert.notEqual(response.json().ok, true);
+  assert.deepEqual(response.json(), { error: "Database unavailable" });
 });
 
 test("CORS preflight preserves the starter's allowed methods", async (t) => {

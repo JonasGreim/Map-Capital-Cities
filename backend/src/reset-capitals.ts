@@ -30,6 +30,7 @@ export async function resetCapitals(database: CapitalDatabase) {
 export function resetRoutes(app: FastifyInstance, database: CapitalDatabase, metadata: CountryMetadataLookup) {
   let pending = false;
   app.setErrorHandler<FastifyError>((error, _request, reply) => {
+    if (error.statusCode === 429) return reply.code(429).send({ error: "Too many demo resets. Please wait a minute and try again." });
     if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
       return reply.code(error.statusCode).send({ error: "Invalid reset request" });
     }

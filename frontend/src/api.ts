@@ -1,6 +1,7 @@
 import { readContinents, type Continent } from "./continent-filter";
 import { flagUrl } from "./country-flag";
 import { readPopulation, readCurrencies, type CountryCurrency } from "./country-facts";
+import { apiUrl } from "./api-url";
 
 export type CapitalInput = {
   name: string;
@@ -44,7 +45,7 @@ export async function getCapitals(): Promise<Capital[]> {
   const timeoutMessage = "The capital API took too long to respond. Please try again.";
   let response: Response;
   try {
-    response = await fetch("/capital", { headers: { Accept: "application/json" }, signal });
+    response = await fetch(apiUrl("/capital"), { headers: { Accept: "application/json" }, signal });
   } catch {
     if (signal.aborted) throw new Error(timeoutMessage);
     throw new Error("Could not reach the capital API. Check your connection and try again.");
@@ -71,7 +72,7 @@ async function mutateCapital(method: "POST" | "PUT" | "DELETE", id?: number, inp
   const uncertain = "The change may have been saved. Reload the page before trying again.";
   let response: Response;
   try {
-    response = await fetch(id === undefined ? "/capital" : `/capital/${id}`, {
+    response = await fetch(apiUrl(id === undefined ? "/capital" : `/capital/${id}`), {
       method,
       headers: { Accept: "application/json", ...(input ? { "Content-Type": "application/json" } : {}) },
       ...(input ? { body: JSON.stringify({ name: input.name, country: input.country, latitude: input.latitude, longitude: input.longitude }) } : {}),
@@ -85,6 +86,7 @@ async function mutateCapital(method: "POST" | "PUT" | "DELETE", id?: number, inp
       400: "Check all fields and coordinate ranges, then try again.",
       404: "This capital no longer exists. Cancel and reload the page.",
       409: "A capital with this name or country already exists. Choose another name or country.",
+      429: "The shared demo is busy. Please wait a minute before trying again.",
     };
     throw new Error(messages[response.status] ?? "Unable to save the change. Please try again.");
   }
@@ -115,12 +117,13 @@ export async function resetCapitals(): Promise<Capital[]> {
   const uncertain = "The reset may have completed. Reload current data before deciding whether to reset again.";
   let response: Response;
   try {
-    response = await fetch("/capital-reset", {
+    response = await fetch(apiUrl("/capital-reset"), {
       method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify({ confirm: true }), signal: AbortSignal.timeout(15_000),
     });
   } catch { throw new Error(`Could not confirm the reset. ${uncertain}`); }
   if (!response.ok) {
+    if (response.status === 429) throw new Error("The shared demo is busy. Please wait a minute before trying again.");
     if (response.status === 409) throw new Error("Another reset is in progress. Reload current data before trying again.");
     throw new Error(`Unable to reset capitals (HTTP ${response.status}). ${uncertain}`);
   }

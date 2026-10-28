@@ -114,6 +114,12 @@ Existing populated databases receive a non-destructive metadata backfill on the
 first upgraded start. Failed imports roll back and can be retried. See the
 [initialization and recovery details](docs/technical-reference.md#backend).
 
+The [Render deployment guide](docs/render-deployment.md) prepares a separate static
+frontend, sleeping Free API and disposable Free PostgreSQL database. A hosted demo
+is intentionally anonymous: all visitors share edits, deletions and manual resets.
+Free PostgreSQL expires after 30 days, so this requires owner maintenance. No public
+demo URL is listed until the owner provisions and verifies the deployment.
+
 ## 🧪 Testing <a name="testing"></a>
 
 ```bash
@@ -128,5 +134,6 @@ See [Testing](docs/testing.md) for details.
 
 - [Technical Reference](docs/technical-reference.md): API, import, schema, reset/security and UI behavior
 - [Development](docs/development.md): configuration, Docker operation and troubleshooting
+- [Free Render deployment](docs/render-deployment.md): Blueprint setup, shared public demo, secrets, free-plan limits and database replacement; provisioning and live verification remain owner steps
 - [Testing](docs/testing.md): unit, PostgreSQL, browser tests and coverage status
 - [Submission / Validation](docs/submission.md): readiness checklist and validation reports

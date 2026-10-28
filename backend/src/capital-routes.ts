@@ -2,7 +2,7 @@ import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from
 import { capitalStore, type Capital, type CapitalResponse, type CapitalDatabase, type CapitalInput } from "./capitals.js";
 import { countryMetadata, type CountryMetadataLookup } from "./import-capitals.js";
 
-const text = { type: "string", minLength: 1, pattern: "\\S", not: { pattern: "\u0000" } };
+const text = { type: "string", minLength: 1, maxLength: 200, pattern: "\\S", not: { pattern: "\u0000" } };
 const body = {
   type: "object",
   additionalProperties: false,
@@ -39,6 +39,7 @@ export function capitalRoutes(app: FastifyInstance, database: CapitalDatabase, m
 
   // Scoped to capital routes so the existing health error contract stays intact.
   app.setErrorHandler<FastifyError>((error, _request, reply) => {
+    if (error.statusCode === 429) return reply.code(429).send({ error: "Too many demo changes. Please wait a minute and try again." });
     if (error.code === "23505") return reply.code(409).send({ error: "Capital name or country already exists" });
     if (error.validation || error.code === "23502" || error.code === "23514") {
       return reply.code(400).send({ error: "Invalid request data" });
