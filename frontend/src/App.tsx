@@ -62,7 +62,7 @@ function AppLayout() {
           <Map active={mapActive} />
         </section>
       </div>
-      <CapitalLoadingStatus loading={loading} initial={!hasLoaded} />
+      <CapitalLoadingStatus loading={loading} initial={!hasLoaded} error={listActive ? null : error} onRetry={fetchCapitals} />
       <MobileNavigation active={activeView} disabled={picking} onChange={next => { closeActions(); setView(next); }} />
     </main>
   );

@@ -1,10 +1,21 @@
 import { useEffect, useState } from "react";
 
-export function CapitalLoadingStatus({ loading, initial }: { loading: boolean; initial: boolean }) {
+export function CapitalLoadingStatus({ loading, initial, error, onRetry }: {
+  loading: boolean;
+  initial: boolean;
+  error: string | null;
+  onRetry: () => Promise<void>;
+}) {
   // Keep one polite region outside the busy/hidden panes, including on mobile.
-  return <div className="capital-loading-status" role="status" aria-live="polite" aria-atomic="true">
-    {loading && <LoadingMessage initial={initial} />}
-  </div>;
+  return <>
+    <div className="capital-loading-status" role="status" aria-live="polite" aria-atomic="true">
+      {loading && <LoadingMessage initial={initial} />}
+    </div>
+    {!loading && error && <div className="capital-load-error">
+      <p id="capital-load-error-message" role="alert">{error}</p>
+      <button type="button" aria-describedby="capital-load-error-message" onClick={() => { void onRetry(); }}>Try again</button>
+    </div>}
+  </>;
 }
 
 function LoadingMessage({ initial }: { initial: boolean }) {

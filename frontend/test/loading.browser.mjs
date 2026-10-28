@@ -130,6 +130,58 @@ export async function verifyLoading(page, baseURL, screenshotDirectory) {
     assert.equal(reads, before + 1);
   }
 
+  // Errors must also be actionable without opening the sidebar or changing tabs.
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    mode = "http";
+    const before = reads;
+    await page.goto(baseURL, { waitUntil: "domcontentloaded" });
+    if (width > 700) await page.getByRole("button", { name: "Collapse sidebar" }).click();
+    const fallback = page.locator(".capital-load-error");
+    await fallback.getByRole("alert").waitFor();
+    assert.equal(await fallback.getByRole("alert").textContent(), "Unable to load capitals (HTTP 503). Please try again.");
+    assert.equal(await page.getByRole("alert").count(), 1);
+    assert.equal(await page.locator("#world-map").isVisible(), true);
+    await page.clock.fastForward(6_000);
+    assert.equal(reads, before + 1, "no automatic retry or tab change");
+    assert.equal(await fallback.evaluate(el => {
+      const r = el.getBoundingClientRect(), nav = document.querySelector(".mobile-navigation").getBoundingClientRect();
+      const controls = document.querySelector(".map-navigation").getBoundingClientRect();
+      return r.top >= controls.bottom && r.bottom <= innerHeight - nav.height;
+    }), true, "error card must leave map controls and mobile navigation clear");
+    if (screenshotDirectory) await page.screenshot({ path: `${screenshotDirectory}/load-error-${width}.png` });
+
+    await showView(page, "Capitals");
+    if (width > 700) await page.getByRole("button", { name: "Expand sidebar" }).click();
+    assert.equal(await fallback.count(), 0);
+    assert.equal(await page.getByRole("alert").count(), 1);
+    assert.equal(await page.getByRole("button", { name: "Try again" }).count(), 1);
+    await showView(page, "Map");
+    if (width > 700) await page.getByRole("button", { name: "Collapse sidebar" }).click();
+
+    mode = "hold";
+    const retry = fallback.getByRole("button", { name: "Try again" });
+    await retry.focus();
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    assert.equal(await retry.evaluate(el => document.activeElement === el), true);
+    if (width === 1440) await page.keyboard.press("Enter");
+    else await retry.click(); // Also verifies pointer-events on the mobile button.
+    await spinner.waitFor();
+    assert.equal(await fallback.count(), 0);
+    assert.equal(await page.getByRole("alert").count(), 0);
+    assert.equal(await page.locator("#world-map").isVisible(), true);
+    await held.shift().fulfill({ json: capitals });
+    await settled();
+    await page.locator(".capital-marker").waitFor();
+    assert.equal(await fallback.count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Try again" }).count(), 0);
+    assert.equal(reads, before + 2);
+    await showView(page, "Capitals");
+    if (width > 700) await page.getByRole("button", { name: "Expand sidebar" }).click();
+    await page.getByRole("button", { name: "Show Berlin, Germany on map" }).waitFor();
+  }
+
   mode = "hold";
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
   await spinner.waitFor();
