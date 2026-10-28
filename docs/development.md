@@ -26,8 +26,9 @@ connections`. Check that the root `.env` uses the matching database, credentials
 and host/port (the regular Compose service exposes `localhost:5432`).
 
 `npm run dev` starts both workspaces concurrently. Vite can be ready before the
-API: the backend waits for PostgreSQL, completes the REST Countries import, then
-prints `API on http://localhost:3001` (or your `PORT`). Temporary Vite
+API: the backend waits for PostgreSQL, initializes an unmarked database or loads
+persisted metadata, then prints `API on http://localhost:3001` (or your `PORT`).
+Temporary Vite
 `ECONNREFUSED` messages before that line are expected. Retry in the UI or reload
 once the API is ready; verify `curl -i http://localhost:3001/health` and
 `curl -i http://localhost:3001/capital`. Persistent refusals after a watcher failure
@@ -60,10 +61,12 @@ No host Node/npm installation is needed for this option. From the repository
 root, copy `.env.example` to `.env` **if you do not already have one**, then set:
 
 - `RESTCOUNTRIES_API_KEY`: private REST Countries v5 key, passed only to the API
-  at **runtime**. Never put it in a `VITE_` variable or a Docker build argument.
+  at **runtime**, required only for the first successful initialization/backfill.
+  A completed database starts without this key. Never put it in a `VITE_` variable
+  or a Docker build argument.
 - `VITE_MAPBOX_TOKEN`: **public** Mapbox browser token (`pk...`), passed to Vite
   at **build time**. It is intentionally visible in the static bundle. Changing
-  it requires rebuilding the frontend. Empty keys fail Compose validation with
+  it requires rebuilding the frontend. An empty Mapbox token fails Compose validation with
   setup guidance; the existing frontend map-error feedback is unchanged.
 - `DEMO_PORT`: optional browser port, default **8080**. For example, use
   `DEMO_PORT=8081` in `.env` if 8080 is occupied.
@@ -98,14 +101,17 @@ alongside each other because the demo publishes only its browser port.
 
 The separate Compose project **`map-capitals-demo`** owns the named volume
 **`map-capitals-demo_demo-pgdata`**. It never mounts the normal development
-`pgdata` volume. `db/schema.sql` runs only when that demo volume is empty;
-subsequent starts preserve records and do not rerun initialization or migrations.
+`pgdata` volume. PostgreSQL runs `db/schema.sql` when that demo volume is empty.
+The backend also applies this idempotent schema transactionally when no import marker exists,
+covering existing volumes and managed PostgreSQL. Completed starts only read the
+marker and persisted metadata; they preserve all capital edits and deletions.
 If you use `-p another-name`, include it in **every** command below: that project
 has its own volume and containers. Keep the same project name to retain data.
 
 PostgreSQL must pass `pg_isready` before the API starts. The API waits for the DB,
-completes its REST Countries import, then opens HTTP; its health check calls the
-existing DB-backed `/health`. Nginx starts only after the API is healthy. Allow
+completes first initialization or loads persisted metadata, then opens HTTP. Its
+health check calls the existing DB-backed `/health`. Nginx starts only after the
+API is healthy. Allow
 a short first-start/import phase; health checks allow about seven minutes for
 startup before marking the API unhealthy. `up -d` does not guarantee the
 frontend has completed its own first health check; inspect status and HTTP:
@@ -133,15 +139,15 @@ docker compose down
 docker compose up -d
 # Rebuild after code changes or a public Mapbox token change.
 docker compose up --build -d --force-recreate
-# Restart only the API (runs the existing import again).
+# Restart only the API (loads persisted metadata; no repeat import).
 docker compose restart api
 ```
 
 This is a local demo without authentication/TLS or production hosting. External
-network access, a valid REST Countries key, Mapbox token and flag CDN access are
-required. Every API start imports again: existing matching records keep local
-edits, but deleted imported capitals can reappear. Stop/restart retains manually
-created rows. Never delete volumes as routine cleanup. Avoid printing expanded
+network access and a valid REST Countries key are required for first initialization;
+Mapbox and flag CDN access are needed for map/flag images. Subsequent API starts
+use PostgreSQL without upstream requests; edits, deletions and custom rows survive.
+Never delete volumes as routine cleanup. Avoid printing expanded
 `docker compose config` output: it contains the runtime API key; use
 `docker compose config --quiet` for validation.
 See the [Docker validation report](full-stack-docker-validation.md) for
@@ -152,8 +158,9 @@ the real build, HTTP/CRUD, persistence, browser and failure checks and their lim
 All Compose configurations mount [db/schema.sql](../db/schema.sql) read-only into PostgreSQL's
 `/docker-entrypoint-initdb.d/`. It runs automatically **only when the database
 storage is first initialized**. Existing `pgdata` volumes and rows are preserved;
-Docker does not rerun init scripts on them. For an existing starter database,
-apply the schema once without resetting its volume:
+Docker does not rerun init scripts on them. The backend applies the schema before
+the first import/backfill automatically. To inspect/apply just the schema manually
+without resetting an existing volume, use:
 
 ```bash
 docker compose -f docker-compose.yml exec -T db psql -U postgres -d capitals -v ON_ERROR_STOP=1 < db/schema.sql
@@ -162,3 +169,22 @@ docker compose -f docker-compose.yml exec -T db psql -U postgres -d capitals -v 
 
 The script can be reapplied to this schema. It is not a migration framework and
 does not repair an incompatible, manually created `capitals` table.
+
+## Database initialization and recovery (#69)
+
+REST Countries is called only before the first successful initialization of a
+database. `country_metadata` and `import_state` persist alongside capitals.
+An existing populated development volume gets a one-time metadata backfill;
+all capital values, IDs and deletions remain unchanged. Do not wipe volumes or
+manually remove the completion marker. No explicit migration command is needed:
+the backend includes `db/schema.sql`, applies it safely and does not listen until
+the initialization transaction commits. The schema owner/runtime role must have
+the necessary CREATE/read/write permissions during that first initialization.
+
+Missing API keys, upstream failures or SQL errors on an uninitialized DB cause a
+nonzero startup failure and rollback. Fix the key/network/permissions and restart.
+After completion the key can be omitted and upstream outages do not affect
+startup. A recreated/expired database, including a future Render DB replacement,
+is a new empty database and needs the key again. This is not scheduled refresh;
+reset only replaces capitals from the bundled snapshot and keeps metadata/status.
+See [transaction and concurrency details](technical-reference.md#backend).

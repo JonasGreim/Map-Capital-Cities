@@ -5,6 +5,7 @@
 !package-lock.json
 !db/
 !db/default-capitals.json
+!db/schema.sql
 !backend/
 !backend/package.json
 !backend/tsconfig.json

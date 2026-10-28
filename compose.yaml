@@ -21,7 +21,7 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       DATABASE_URL: postgres://postgres:postgres@db:5432/capitals
-      RESTCOUNTRIES_API_KEY: ${RESTCOUNTRIES_API_KEY:?Set RESTCOUNTRIES_API_KEY in the root .env}
+      RESTCOUNTRIES_API_KEY: ${RESTCOUNTRIES_API_KEY:-}
       PORT: "3001"
     depends_on:
       db:

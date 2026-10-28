@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { readPopulation, readCurrencies, type CountryCurrency } from "./country-facts.js";
 
 const endpoint = "https://api.restcountries.com/countries/v5";
@@ -82,12 +82,11 @@ function capitalFrom(value: unknown): Capital | undefined {
   return { name: capital.name.trim(), country: value.names.common.trim(), latitude: lat, longitude: lng };
 }
 
-// Policy belongs to the caller: this importer can also serve a future seed-once startup.
-export async function importCapitals(
-  database: Pick<Pool, "connect">,
+// Shared validated fetch for initialization and the low-level importer.
+export async function fetchCapitalData(
   apiKey: string | undefined,
   fetchPage: typeof fetch = fetch,
-): Promise<ImportStats & { metadata: CountryMetadataLookup }> {
+) {
   const stats: ImportStats = { pages: 0, fetched: 0, skippedInvalid: 0, skippedExisting: 0, inserted: 0 };
   function fail(message: string): never { throw new ImportError(message, { ...stats }); }
   if (!apiKey?.trim()) fail("RESTCOUNTRIES_API_KEY is required; import not started");
@@ -164,34 +163,46 @@ export async function importCapitals(
     if (!more) break;
   }
 
-  // Fetch everything first, then commit all inserts together. No partial import on failure.
+  return { stats, capitals, metadata };
+}
+
+export async function insertCapitals(client: Pick<PoolClient, "query">, capitals: Capital[], stats: ImportStats) {
+  let inserted = 0;
+  for (const capital of capitals) {
+    const result = await client.query(
+      "INSERT INTO capitals (name, latitude, longitude, country) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
+      [capital.name, capital.latitude, capital.longitude, capital.country],
+    );
+    inserted += result.rowCount ?? 0;
+  }
+  stats.inserted = inserted;
+  stats.skippedExisting = capitals.length - inserted;
+}
+
+// Low-level import used by importer tests; backend startup uses initializeDatabase.
+export async function importCapitals(
+  database: Pick<Pool, "connect">,
+  apiKey: string | undefined,
+  fetchPage: typeof fetch = fetch,
+): Promise<ImportStats & { metadata: CountryMetadataLookup }> {
+  const { stats, capitals, metadata } = await fetchCapitalData(apiKey, fetchPage);
   let client;
   try {
     client = await database.connect();
   } catch {
-    fail("PostgreSQL connection failed; no capitals imported");
+    throw new ImportError("PostgreSQL connection failed; no capitals imported", stats);
   }
-  let inserted = 0;
   let transactionFailed = false;
   try {
     await client.query("BEGIN");
-    for (const capital of capitals) {
-      const result = await client.query(
-        "INSERT INTO capitals (name, latitude, longitude, country) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
-        [capital.name, capital.latitude, capital.longitude, capital.country],
-      );
-      inserted += result.rowCount ?? 0;
-    }
+    await insertCapitals(client, capitals, stats);
     await client.query("COMMIT");
   } catch {
     transactionFailed = true;
     try { await client.query("ROLLBACK"); } catch { /* Preserve the original failure. */ }
-    fail("PostgreSQL import transaction failed; import not successful (check db/schema.sql initialization)");
+    throw new ImportError("PostgreSQL import transaction failed; import not successful", { ...stats, inserted: 0 });
   } finally {
     client.release(transactionFailed);
   }
-  stats.inserted = inserted;
-  stats.skippedExisting = capitals.length - inserted;
-  // Metadata becomes available to the caller only after every page and COMMIT succeed.
   return { ...stats, metadata };
 }

@@ -6,8 +6,9 @@
 
 React + Vite uses Zustand for shared state and native fetch for the same-origin
 Fastify REST API. Fastify uses a pg pool and parameterized SQL against PostgreSQL.
-Mapbox renders the browser map; REST Countries v5 is imported server-side at startup.
-Country metadata stays in backend memory; marker colors stay in browser storage.
+Mapbox renders the browser map; REST Countries v5 is imported once per database.
+Country metadata persists in PostgreSQL and is loaded into backend memory at startup;
+marker colors stay in browser storage.
 
 The assignment's core is first-run SQL initialization, startup import, five CRUD
 routes, the capital/country list and square 32 × 32px markers with color popups.
@@ -31,60 +32,81 @@ countries have an exact unique constraint.
 
 ## Backend
 
-On startup, import countries and capitals from [REST Countries](https://restcountries.com/docs) v5
-(`country` = common name, `name` = capital):
+Startup first checks PostgreSQL readiness (up to 30 attempts for known transient
+failures, 1 second between failures; connections time out after 2 seconds and
+ordinary queries after 5 seconds). Root `.env` loading, port 3001 (unless `PORT`
+overrides it) and DB-backed `/health` are unchanged. Fixed readiness and
+initialization errors never print credentials or raw database errors.
+
+`backend/src/initialize-database.ts` controls **seed once per database**:
+
+1. A completed `rest-countries-v5` row in `import_state` means startup only loads
+   `country_metadata`. It makes **zero REST Countries calls**, needs no API key,
+   and works during an upstream outage. Empty/edited/deleted capitals stay as they are.
+2. Without that marker, one checked-out pg client begins a transaction and takes
+   a database-wide advisory transaction lock. It checks completion again after
+   acquiring the lock, then idempotently applies the bundled `db/schema.sql`.
+   This also works on managed PostgreSQL without Docker entrypoint scripts;
+   the runtime image includes the SQL. The DB role needs schema/table creation
+   rights for initialization and normal table read/write rights afterward.
+3. A table write lock protects the legacy-data decision and serializes concurrent
+   CRUD/reset writers during initialization. An empty capitals table receives the
+   validated live capital data using parameterized `ON CONFLICT DO NOTHING` inserts.
+   A populated legacy table receives **metadata only**: no capitals are inserted,
+   updated or deleted, preserving IDs, custom entries and previous deletions.
+4. All validated metadata, capital inserts (for an empty DB) and the successful
+   marker commit together. HTTP starts only afterward. A competing initializer
+   waits and then loads the committed data without fetching again. Its lock wait
+   is bounded at 30 minutes (covering the importer's 100 × 15-second request cap);
+   only that query overrides the ordinary pg query timeout. Other SQL statements
+   time out after 5 seconds. A failed/abandoned transaction releases its locks.
+
+`country_metadata` uses normalized `country_key` (the same JavaScript trim and
+lowercase operation as the response lookup), nullable two-letter `flag_code`,
+nullable JSONB `continents` and `currencies`, and nullable BIGINT `population`
+bounded to JavaScript's safe nonnegative integer range. Population is loaded as
+a number, including zero; SQL NULL stays JSON null. Countries without valid
+capitals are included. There are no flag image blobs, aliases or fuzzy matching.
+The original `capitals` constraints remain unchanged. `import_state` stores the
+source and a non-null `completed_at` timestamp; capital counts never indicate
+completion. No scheduled refresh or automatic metadata refresh is implemented.
+
+The shared `backend/src/import-capitals.ts` fetches the authenticated v5 source:
 
 ```
 GET https://api.restcountries.com/countries/v5
 Authorization: Bearer <RESTCOUNTRIES_API_KEY>
 ```
 
-`backend/src/import-capitals.ts` is independent of the server bootstrap. Startup
-first checks PostgreSQL readiness (up to 30 attempts for known transient failures,
-1 second between failures; connections time out after 2 seconds and queries after
-5 seconds), then imports,
-then listens on port 3001. A missing key, unavailable DB, failed import or missing
-schema aborts startup with a visible error and nonzero exit status. The root
-`.env` is loaded before creating the pool; the API key remains server-side.
-Authentication errors, a missing database, an unknown host and unrecognized
-configuration errors fail on the first attempt. Readiness errors provide fixed,
-sanitized hints without printing the connection URI or raw database error.
-The retry budget is finite, not a fixed 30-second deadline: connection/query
-duration adds to the 29 one-second gaps. A refused local connection normally
-exhausts the budget in about 29 seconds.
+It requests `limit=100`, advances `offset` by returned count, and validates
+`data.meta.total/count/limit/offset/more`. Without pagination metadata, full pages
+continue until a short/empty page. Contradictions, changing totals, repeated pages,
+demo responses, invalid envelopes/JSON, HTTP and network failures abort the import.
+Each request has a 15-second timeout and at most 100 pages are accepted. Records
+map `names.common`, `capitals[0].name` and its `coordinates.lat/lng`; invalid/blank
+names or nonfinite/out-of-range coordinates are skipped. Additional capitals are
+ignored. Independently validated flags, continents, population and currencies are
+collected from every page, even for countries without capitals. Conflicting facts
+remain null. An empty/wholly invalid capital result cannot mark initialization
+complete. Every page is fetched before capital/metadata writes begin.
 
-The importer requests `limit=100` and advances `offset` by the returned count.
-It maps `data.objects`: `names.common` → country, `capitals[0].name` → name and
-`capitals[0].coordinates.lat/lng` → coordinates. Text is trimmed; missing/blank
-names, missing first capitals, nonnumeric/nonfinite or out-of-range coordinates
-are skipped. Additional capitals are ignored as required by the assignment.
+**Recovery and migration:** missing keys or fetch/validation/SQL failures abort
+startup before HTTP, roll back data/marker changes (including newly created schema)
+and leave initialization retryable. Fix the cause and restart; requests are not
+automatically retried. Success logs report `seeded`, `backfilled` or `loaded`, plus
+import counts when a fetch occurred. Failures never report rolled-back inserts as
+committed. A populated pre-#69 volume needs one successful authenticated backfill;
+do not delete it. An empty legacy table without a marker is indistinguishable
+from an uninitialized one and receives a first seed. A completed database's empty
+table always stays empty. Never delete the marker as a reset mechanism.
 
-Pagination follows and validates `data.meta.total/count/limit/offset/more` from
-the [v5 documentation](https://restcountries.com/docs/countries#pagination).
-Without metadata it continues full pages until a short/empty page. Contradictory
-metadata, stalled/repeated pages, changing totals, demo responses, invalid JSON
-or envelopes, HTTP errors and network failures fail the import. Each request has
-a 15-second timeout; a 100-page safety cap prevents an endless import. Failed
-requests are not automatically retried; fix the error and restart the backend.
-
-All pages are fetched and validated before opening a transaction. Parameterized
-inserts use `ON CONFLICT DO NOTHING`; one transaction commits all valid records
-or rolls back on a database error. A failed later API page causes no DB writes.
-Success logs include pages, fetched records, skipped invalid records, conflicts
-(`skippedExisting`, including duplicates within the API result) and inserted
-records. Failure logs include the failing stage/offset and progress counts;
-uncommitted inserts are never reported as imported.
-
-**Current import policy and limitations:** REST Countries is queried on every
-backend startup, even when local records already exist. Existing records retain
-their local values when either unique key still matches: the case-insensitive
-capital name or the exact country. **Deleted imported capitals can reappear after
-a backend restart.** Changing both the capital name and country can also allow
-the original record to be imported again, because neither unique key then matches.
-Backend startup currently depends on REST Countries being available: a failed
-request aborts startup before the API begins listening. These are limitations of
-the agreed startup-import policy; no persistent import-completion marker is implemented. The explicit
-[Reset to default](#reset-to-default) operation is separate from startup import.
+This post-submission change deliberately replaces the assignment's former
+**import on every backend start** policy. CRUD changes now survive restarts until
+an explicit [Reset to default](#reset-to-default), which restores only the frozen
+snapshot and leaves metadata/completion untouched. Recreating a database (including
+an expired/deleted Render database) loses its data and marker and therefore needs
+a new first import with a valid key. Keep backups when preservation is required;
+no deployment or expiry-management automation is included here.
 
 ### Capital API
 
@@ -94,9 +116,9 @@ POST and PUT require `Content-Type: application/json`.
 `flagCode` is read-only response metadata (`"DE"`, `"CZ"`, or `null`), derived from
 `names.common` and validated `codes.alpha_2` in **all pages** of the v5 startup
 import, including countries without valid capitals. The shared metadata lookup
-stays in memory and is published only after a successful import transaction; no DB migration is
-needed. Names match after trimming and lowercasing, without aliases or fuzzy
-matching. Conflicting or invalid metadata and unknown names resolve to `null`.
+is persisted in PostgreSQL and loaded before serving requests; the initial
+transaction publishes it only after commit. Names match after trimming and
+lowercasing, without aliases or fuzzy matching. Conflicting or invalid metadata and unknown names resolve to `null`.
 GET list/name and successful POST/PUT derive the code from the record's current
 country, including existing and manually created rows. POST/PUT still accept
 **only** `name`, `country`, `latitude`, and `longitude`; sending metadata fields is rejected.
@@ -104,7 +126,7 @@ country, including existing and manually created rows. POST/PUT still accept
 `continents` is read-only response metadata (`string[]` or `null`), from the v5
 [`continents` field](https://restcountries.com/docs/countries#field-reference),
 not `region` or coordinates. The existing normalized country-name lookup collects
-both fields across every startup page, including countries without capitals, and
+both fields across every initial-import page, including countries without capitals, and
 publishes them only after import commits. Verified on 25 October 2026 against 254
 live records: Africa, Antarctica, Asia, Europe, North America, Oceania and South
 America. North/South America remain separate. Multi-continent countries match each
@@ -116,7 +138,7 @@ sticky across pages, independently of flag validity. GET/list/name, successful
 POST/PUT and reset decorate the record's **current country** from the same lookup.
 Reset immediately retains metadata; it needs no additional fetch or migration.
 The frontend validates optional metadata and treats unknown/invalid countries as
-unmapped. Metadata refreshes on backend restart.
+unmapped. Metadata is loaded from PostgreSQL on backend restart; it is not refreshed upstream.
 
 Capital popups show exactly three read-only country facts: **Continent** (all
 verified continents), **Country population** (the whole country, not the city),
@@ -312,10 +334,9 @@ list content or taking focus. Starting another operation clears the previous not
 starts a fresh timer, which is also cleaned up on unmount. Errors remain visible
 in the existing dialog/retry flow until handled.
 
-**Persistence limitation:** CRUD writes are stored in PostgreSQL, but REST Countries
-is reimported on **every backend startup**. Deleted imported capitals can reappear
-after a restart; editing both unique names can also allow the original to return.
-Reset to default, described below, is separate from this unchanged import policy.
+**Persistence:** CRUD writes and deletions survive backend restarts, including an
+intentionally empty capitals table after initialization. Only the explicit Reset
+to default operation replaces capital data.
 
 ### Reset to default
 
@@ -374,9 +395,9 @@ after reviewing the current state. If that read fails, Cancel and use the existi
 **Try again** list recovery. The normal sidebar has no Refresh list button;
 automatic initial loading, store reads and browser reload still work.
 
-Reset itself needs no REST Countries network request. Startup still imports live
-data and fails if REST Countries is unavailable; later restarts may supplement
-the frozen dataset with new API records. Other browser sessions receive no push
+Reset itself needs no REST Countries network request. Later restarts retain
+the frozen dataset and load metadata from PostgreSQL without upstream access.
+Other browser sessions receive no push
 and retain their current view/colors until they reload data; new IDs then replace
 their old markers. Reset does not change the map view or store colors in the DB.
 
@@ -465,8 +486,8 @@ invalid, ambiguous or unknown metadata and failed images show a neutral globe
 in the same fixed space. The globe also remains visible while an image loads;
 only a successfully loaded image replaces it, including cache hits and country
 changes. The browser makes no additional country API request;
-country edits replace the flag after a successful save. Metadata refreshes only
-on backend restart, and flag images require CDN access.
+country edits replace the flag after a successful save. Metadata is seeded once
+per database; flag images still require CDN access.
 
 The **Continent** combobox beneath search defaults to **All continents**.
 Its popup offers labeled continent icons, arrow-key navigation and type-ahead.
