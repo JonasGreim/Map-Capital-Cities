@@ -58,12 +58,13 @@ export async function initializeDatabase(
       await client.query("COMMIT");
       return { metadata, mode: "loaded" };
     }
+    // Fetch before schema/table locks so legacy CRUD can continue during network I/O.
+    const { capitals, metadata, stats } = await fetchCapitalData(apiKey, fetchPage);
+    if (capitals.length === 0) throw new ImportError("REST Countries returned no valid capitals; initialization incomplete", stats);
     await client.query(await readFile(new URL("../../db/schema.sql", import.meta.url), "utf8"));
     // Serialize legacy writers/reset while deciding between seed and backfill.
     await client.query("LOCK TABLE capitals IN SHARE ROW EXCLUSIVE MODE");
     const { rows: [existing] } = await client.query<{ present: boolean }>("SELECT EXISTS (SELECT 1 FROM capitals) AS present");
-    const { capitals, metadata, stats } = await fetchCapitalData(apiKey, fetchPage);
-    if (capitals.length === 0) throw new ImportError("REST Countries returned no valid capitals; initialization incomplete", stats);
     // A populated legacy database must preserve IDs, edits AND deleted defaults.
     if (!existing.present) await insertCapitals(client, capitals, stats);
     for (const [country, facts] of metadata) {
@@ -85,6 +86,6 @@ export async function initializeDatabase(
     }
     if (error instanceof ImportError) throw new ImportError(error.message, { ...error.stats, inserted: 0 });
     // Raw pg errors can contain credentials, connection details or imported data.
-    throw new Error("PostgreSQL initialization failed; no successful commit (check database permissions and schema)");
+    throw new Error("PostgreSQL initialization could not be confirmed (check database permissions and schema)");
   } finally { client.release(failed); }
 }

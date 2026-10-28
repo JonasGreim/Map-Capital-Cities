@@ -34,7 +34,7 @@ test("completed startup needs no key, network, transaction or schema writes", as
   assert.equal(mock.destroyed(), false);
 });
 
-test("a missing key rolls back uninitialized schema and never fetches", async () => {
+test("a missing key rolls back initialization and never fetches", async () => {
   const mock = database();
   await assert.rejects(initializeDatabase(mock.db, undefined, async () => { assert.fail("No fetch without a key"); }), /RESTCOUNTRIES_API_KEY is required/);
   assert.equal(mock.queries.at(-1), "ROLLBACK");
@@ -44,7 +44,7 @@ test("a missing key rolls back uninitialized schema and never fetches", async ()
 test("metadata, marker and commit failures roll back and suppress private DB errors", async () => {
   for (const fail of ["INSERT INTO country_metadata", "INSERT INTO import_state", "COMMIT"]) {
     const mock = database({ fail });
-    await assert.rejects(initializeDatabase(mock.db, "test", fetcher), { message: "PostgreSQL initialization failed; no successful commit (check database permissions and schema)" });
+    await assert.rejects(initializeDatabase(mock.db, "test", fetcher), { message: "PostgreSQL initialization could not be confirmed (check database permissions and schema)" });
     assert.equal(mock.queries.at(-1), "ROLLBACK");
     assert.equal(mock.destroyed(), true);
   }

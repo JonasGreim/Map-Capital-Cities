@@ -113,6 +113,45 @@ test("PostgreSQL seed-once initialization, migration, recovery and concurrency",
     assert.deepEqual((await db.query("SELECT * FROM capitals ORDER BY id")).rows, before);
   });
 
+  await t.test("slow legacy fetch allows CRUD writes and checks the resulting rows before seeding", async () => {
+    const { db } = await isolated();
+    const sql = await readFile(new URL("../../db/schema.sql", import.meta.url), "utf8");
+    await db.query(sql.split("CREATE TABLE IF NOT EXISTS country_metadata")[0]);
+    const writer = await db.connect();
+    await writer.query("SET lock_timeout = '1s'");
+    const app = buildApp({ query: (text, values) => writer.query(text, values) });
+    let release!: () => void;
+    let started!: () => void;
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const mock = paginated();
+    const initialization = initializeDatabase(db, "mock-key", async (...args) => {
+      started();
+      await gate;
+      return mock.fetcher(...args);
+    });
+    try {
+      await entered;
+      const input = { name: "Custom", country: "Custom", latitude: 0, longitude: 0 };
+      const created = await app.inject({ method: "POST", url: "/capital", payload: input });
+      assert.equal(created.statusCode, 201, "Create must complete while the external fetch is paused");
+      const id = created.json().id;
+      assert.equal((await app.inject({ method: "PUT", url: `/capital/${id}`, payload: { ...input, name: "Edited" } })).statusCode, 200);
+      const disposable = await app.inject({ method: "POST", url: "/capital", payload: { ...input, name: "Temporary", country: "Temporary" } });
+      assert.equal(disposable.statusCode, 201);
+      assert.equal((await app.inject({ method: "DELETE", url: `/capital/${disposable.json().id}` })).statusCode, 204);
+      const before = (await writer.query("SELECT * FROM capitals ORDER BY id")).rows;
+      release();
+      assert.equal((await initialization).mode, "backfilled", "Rows created during fetch must prevent seeding the initially empty table");
+      assert.deepEqual((await writer.query("SELECT * FROM capitals ORDER BY id")).rows, before);
+      assert.equal((await writer.query("SELECT * FROM import_state")).rowCount, 1);
+    } finally {
+      release();
+      try { await initialization; }
+      finally { await app.close(); writer.release(); }
+    }
+  });
+
   await t.test("failed later API page rolls back fresh schema and can be retried", async () => {
     const { db } = await isolated();
     let requests = 0;
@@ -133,7 +172,7 @@ test("PostgreSQL seed-once initialization, migration, recovery and concurrency",
       if (target !== "capitals") await db.query("INSERT INTO capitals (name, country, latitude, longitude) VALUES ('Existing', 'Existing', 0, 0)");
       const before = (await db.query("SELECT * FROM capitals ORDER BY id")).rows;
       await db.query(`ALTER TABLE ${target} ADD CONSTRAINT import_test_failure CHECK (false) NOT VALID`);
-      await assert.rejects(initializeDatabase(db, "mock-key", paginated().fetcher), /no successful commit/);
+      await assert.rejects(initializeDatabase(db, "mock-key", paginated().fetcher), /initialization could not be confirmed/);
       assert.deepEqual((await db.query("SELECT * FROM capitals ORDER BY id")).rows, before);
       assert.equal((await db.query("SELECT * FROM country_metadata")).rowCount, 0);
       assert.equal((await db.query("SELECT * FROM import_state")).rowCount, 0);
