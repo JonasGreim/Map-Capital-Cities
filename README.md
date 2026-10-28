@@ -17,6 +17,15 @@ Explore capital cities around the world on an interactive map. Discover countrie
 - **Capital management:** Create, edit and delete capitals directly in the application
 - **Responsive design:** Desktop sidebar and mobile bottom navigation
 
+### Live Demo
+
+🌍 **[Try Map Capital Cities](https://map-capitals-web.onrender.com/)**
+
+The application is publicly deployed on Render.
+
+> **Note:** The backend runs on Render's free tier.
+> The first request may take up to a minute after inactivity.
+
 ### Tech Stack
 
 - **Frontend:** React 18, TypeScript, Vite 5, Zustand 4, plain CSS
@@ -31,8 +40,9 @@ Explore capital cities around the world on an interactive map. Discover countrie
 2. [Getting Started](#getting-started)
 3. [Development](#development)
 4. [Architecture](#architecture)
-5. [Testing](#testing)
-6. [Documentation](#documentation)
+5. [Deployment](#deployment)
+6. [Testing](#testing)
+7. [Documentation](#documentation)
 
 ## 🖼️ Screenshots <a name="screenshots"></a>
 
@@ -114,11 +124,16 @@ Existing populated databases receive a non-destructive metadata backfill on the
 first upgraded start. Failed imports roll back and can be retried. See the
 [initialization and recovery details](docs/technical-reference.md#backend).
 
-The [Render deployment guide](docs/render-deployment.md) prepares a separate static
-frontend, sleeping Free API and disposable Free PostgreSQL database. A hosted demo
-is intentionally anonymous: all visitors share edits, deletions and manual resets.
-Free PostgreSQL expires after 30 days, so this requires owner maintenance. No public
-demo URL is listed until the owner provisions and verifies the deployment.
+## ☁️ Deployment <a name="deployment"></a>
+
+Hosted on Render: a Static Site (React), Free Web Service (Fastify), and Free PostgreSQL 16.
+The API has cold starts after inactivity; the database expires after 30 days and requires owner maintenance.
+
+The public demo uses an anonymous, shared dataset: changes are visible to everyone.
+**Reset to default** restores the default capitals for all visitors.
+
+See the [Render deployment guide](docs/render-deployment.md) for setup, environment variables,
+infrastructure, maintenance and troubleshooting.
 
 ## 🧪 Testing <a name="testing"></a>
 
@@ -134,6 +149,6 @@ See [Testing](docs/testing.md) for details.
 
 - [Technical Reference](docs/technical-reference.md): API, import, schema, reset/security and UI behavior
 - [Development](docs/development.md): configuration, Docker operation and troubleshooting
-- [Free Render deployment](docs/render-deployment.md): Blueprint setup, shared public demo, secrets, free-plan limits and database replacement; provisioning and live verification remain owner steps
+- [Render deployment](docs/render-deployment.md): detailed setup and operations guide
 - [Testing](docs/testing.md): unit, PostgreSQL, browser tests and coverage status
 - [Submission / Validation](docs/submission.md): readiness checklist and validation reports

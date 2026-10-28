@@ -2,10 +2,13 @@
 
 [Project overview](../README.md) · [Local Docker setup](development.md) · [Testing](testing.md)
 
-This prepares Issue #65; it does **not** provision or publish anything. Merge the
-deployment PR before creating the Blueprint from `main`. Issues #69/#70 are already
-integrated: PostgreSQL owns the import state/metadata and the frontend handles a
-slow initial request. There is no verified public demo URL yet.
+The application is publicly deployed on Render:
+[frontend](https://map-capitals-web.onrender.com/) ·
+[API](https://map-capitals-api.onrender.com/) ([health](https://map-capitals-api.onrender.com/health)).
+The owner has manually verified the interactive map, capital loading, CRUD and
+reset in production. This does not establish that every live acceptance check
+below has passed. PostgreSQL owns the import state/metadata and the frontend
+handles a slow initial request.
 
 ## Architecture and cost boundary
 
@@ -54,9 +57,9 @@ logs after deployment.
    the root `render.yaml`. Review the proposed changes: exactly one static site,
    one Free API and one Free PostgreSQL 16 in Frankfurt. Do not apply a proposal
    containing paid plans. Service names can receive a suffix if already taken.
-4. Fill the four prompted settings below. The example service URLs are **planned
-   placeholders**, not verified deployments. Use the actual URLs displayed by
-   Render; neither an internal API hostname nor a PostgreSQL URL belongs in Vite.
+4. Fill the four prompted settings below. The example service URLs match the
+   current deployment; for a new deployment, use the actual URLs displayed by
+   Render. Neither an internal API hostname nor a PostgreSQL URL belongs in Vite.
 
    | Service / setting | Value supplied by the owner |
    | --- | --- |
@@ -76,8 +79,8 @@ logs after deployment.
    site**. Vite settings are embedded in the built JavaScript; restarting only the
    API cannot update them. `sync: false` settings are entered at creation and
    retained on later Blueprint syncs, not re-prompted on every sync.
-7. Check **Events/Deploys** for a successful build and healthy API. Only after the
-   live checks below succeed should the real public demo link be added to README.
+7. Check **Events/Deploys** for a successful build and healthy API. Use the live
+   checks below when validating a new deployment or a deployment change.
 
 Never put `.env`, private REST Countries keys, DB URLs/passwords, dashboard
 screenshots containing secrets or generated build artifacts in Git. Vite's
@@ -146,7 +149,10 @@ deadline. Existing JSON schemas, parameterized SQL, query/transaction limits,
 reset serialization and safe errors remain in place. Health failures do not
 return database diagnostics or credentials.
 
-## Live acceptance checks — owner still needs to perform these
+## Live acceptance checks
+
+The owner-reported production checks are summarized above; the full checklist
+below is retained for further validation and is not recorded as fully passed.
 
 1. Open the API's HTTPS `/health` and expect `200 {"ok":true}`. Check `/capital`
    returns an array and `/capital/Berlin` returns one record with country facts.
@@ -260,9 +266,9 @@ On 28 October 2026, using Node 24.22.1 and npm 11.19.1:
   `npm audit --omit=dev` reported zero findings; full audit retains the existing
   Vite high/esbuild moderate advisories. The existing large-bundle warning remains.
 
-These are **local tests**, not a live Render acceptance result. Private GitHub
-authorization, actual resource availability/free-plan selection, service URLs,
-TLS, account billing/quotas and idle wake-up remain owner/live checks above.
+These are **local tests**, separate from the owner-reported production checks
+summarized above. They do not establish the full live acceptance checklist;
+account billing/quotas and idle wake-up still require owner/live verification.
 
 ## Official references
 
