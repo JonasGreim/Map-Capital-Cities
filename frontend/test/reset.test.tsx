@@ -12,6 +12,7 @@ const restored = { ...berlin, id: 100, flagCode: "DE" };
 afterEach(() => useCapitalStore.setState({ capitals: [], loading: false, error: null, mutating: false, selectedCapitalId: null, resetVersion: 0 }));
 
 test("reset POST sends only explicit confirmation and reads validated capitals", async (t) => {
+  const timeout = t.mock.method(AbortSignal, "timeout", () => new AbortController().signal);
   const mock = t.mock.method(globalThis, "fetch", async (_url: unknown, options?: RequestInit) => {
     assert.equal(options?.method, "POST");
     assert.deepEqual(JSON.parse(options!.body as string), { confirm: true });
@@ -19,6 +20,7 @@ test("reset POST sends only explicit confirmation and reads validated capitals",
     return Response.json([restored]);
   });
   assert.deepEqual(await resetCapitals(), [restored]);
+  assert.deepEqual(timeout.mock.calls[0].arguments, [15_000]);
   assert.equal(mock.mock.calls[0].arguments[0], "/capital-reset");
   assert.equal(mock.mock.callCount(), 1);
 });

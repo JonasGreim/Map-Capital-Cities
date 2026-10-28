@@ -18,6 +18,7 @@ import { verifyMobileResponsive } from "./mobile-responsive.browser.mjs";
 import { verifyMobileNavigation } from "./mobile-navigation.browser.mjs";
 import { verifyToast } from "./toast.browser.mjs";
 import { verifyMapNavigation } from "./map-navigation.browser.mjs";
+import { verifyLoading } from "./loading.browser.mjs";
 
 // Reuse externally supplied Playwright tooling; no extra project dependency.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
@@ -35,12 +36,12 @@ try {
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
     args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
   });
-  for (const [name, verify] of [["map-navigation", verifyMapNavigation], ["sidebar-controls", verifySidebarControls], ["sidebar-rail", verifySidebarRail], ["mobile-responsive", verifyMobileResponsive], ["mobile-navigation", verifyMobileNavigation], ["toast", verifyToast], ["coordinate-picker", verifyCoordinatePicker], ["marker-colors", verifyMarkerColors], ["branding", verifyBranding], ["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents], ["sidebar-polish", verifySidebarPolish], ["popup-actions", verifyPopupActions],
+  for (const [name, verify] of [["loading", verifyLoading], ["map-navigation", verifyMapNavigation], ["sidebar-controls", verifySidebarControls], ["sidebar-rail", verifySidebarRail], ["mobile-responsive", verifyMobileResponsive], ["mobile-navigation", verifyMobileNavigation], ["toast", verifyToast], ["coordinate-picker", verifyCoordinatePicker], ["marker-colors", verifyMarkerColors], ["branding", verifyBranding], ["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents], ["sidebar-polish", verifySidebarPolish], ["popup-actions", verifyPopupActions],
     ...["success", "construction-error", "initial-style-error", "no-token"].map(mode => [`map-errors-${mode}`, (page, url) => verifyMapErrors(page, url, mode)])]) {
     if (process.env.BROWSER_SUITES && !process.env.BROWSER_SUITES.split(",").includes(name)) continue;
     const context = await browser.newContext({ hasTouch: ["popup-actions", "sidebar-controls"].includes(name) });
     try {
-      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", ["map-navigation", "sidebar-controls", "sidebar-rail", "reset", "mobile-responsive", "mobile-navigation", "toast", "coordinate-picker", "marker-colors", "sidebar-polish", "popup-actions"].includes(name) ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
+      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", ["loading", "map-navigation", "sidebar-controls", "sidebar-rail", "reset", "mobile-responsive", "mobile-navigation", "toast", "coordinate-picker", "marker-colors", "sidebar-polish", "popup-actions"].includes(name) ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
     } catch (error) {
       if (process.env.BROWSER_SCREENSHOT_DIR) {
         const page = context.pages()[0];

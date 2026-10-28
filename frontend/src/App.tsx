@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Brand } from "./Brand";
 import { CapitalList } from "./CapitalList";
+import { CapitalLoadingStatus } from "./CapitalLoadingStatus";
 import { Map } from "./Map";
 import { useCapitalStore } from "./capital-store";
 import { CapitalActions, useCapitalActions } from "./CapitalActions";
@@ -45,7 +46,7 @@ function AppLayout() {
       target?.focus({ preventScroll: true });
     }
   }, [mobile, activeView, listActive]);
-  const { capitals, loading, error, fetchCapitals } = useCapitalStore();
+  const { capitals, loading, hasLoaded, error, fetchCapitals } = useCapitalStore();
   useEffect(() => { void fetchCapitals(); }, [fetchCapitals]);
 
   return (
@@ -61,6 +62,7 @@ function AppLayout() {
           <Map active={mapActive} />
         </section>
       </div>
+      <CapitalLoadingStatus loading={loading} initial={!hasLoaded} error={listActive ? null : error} onRetry={fetchCapitals} />
       <MobileNavigation active={activeView} disabled={picking} onChange={next => { closeActions(); setView(next); }} />
     </main>
   );

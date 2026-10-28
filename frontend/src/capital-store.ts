@@ -6,6 +6,7 @@ import { removeMarkerColor, clearMarkerColors } from "./marker-color-storage";
 type CapitalState = {
   capitals: Capital[];
   loading: boolean;
+  hasLoaded: boolean;
   error: string | null;
   mutating: boolean;
   selectedCapitalId: number | null;
@@ -43,6 +44,7 @@ export const useCapitalStore = create<CapitalState>((set, get) => {
   return {
     capitals: [],
     loading: false,
+    hasLoaded: false,
     error: null,
     mutating: false,
     selectedCapitalId: null,
@@ -82,7 +84,7 @@ export const useCapitalStore = create<CapitalState>((set, get) => {
       if (get().mutating) return Promise.resolve();
       set({ loading: true, error: null });
       pendingRequest = getCapitals()
-        .then((capitals) => { set((state) => ({ capitals, loading: false,
+        .then((capitals) => { set((state) => ({ capitals, loading: false, hasLoaded: true,
           selectedCapitalId: capitals.some((capital) => capital.id === state.selectedCapitalId && matchesContinent(capital, state.continent)) ? state.selectedCapitalId : null })); })
         .catch((error: unknown) => {
           set({ loading: false, error: error instanceof Error ? error.message : "Unable to load capitals. Please try again." });
