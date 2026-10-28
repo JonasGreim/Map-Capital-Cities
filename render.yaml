@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+# Owner creates this Blueprint after merge; no cloud resources are created by CI.
+services:
+  - type: web
+    name: map-capitals-web
+    runtime: static
+    branch: main
+    autoDeployTrigger: checksPass
+    buildCommand: npm install --global npm@11.19.1 && npm ci --include=dev && npm run build -w frontend
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: NODE_VERSION
+        value: 24.22.1
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
+      - key: VITE_MAPBOX_TOKEN
+        sync: false
+      # Public HTTPS API origin, never its private-network hostname.
+      - key: VITE_API_BASE_URL
+        sync: false
+
+  - type: web
+    name: map-capitals-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: checksPass
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: map-capitals-db
+          property: connectionString
+      - key: RESTCOUNTRIES_API_KEY
+        sync: false
+      # Exact public frontend origin(s), comma-separated, without trailing slash.
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PUBLIC_DEMO
+        value: "true"
+
+databases:
+  - name: map-capitals-db
+    plan: free
+    region: frankfurt
+    postgresMajorVersion: "16"
+    # Allow the API's internal connection, deny external database connections.
+    ipAllowList: []

@@ -276,6 +276,27 @@ for the matrix and limits; these checks do not establish physical-device behavio
 
 ## Browser runner and CI prerequisite
 
+For an opt-in production smoke, `frontend/test/deployment.browser.mjs` builds
+static assets into a temporary directory and serves them on
+`http://localhost:5190`, with `VITE_API_BASE_URL` compiled to `TEST_API_URL`.
+It accepts only a loopback HTTP API and **performs CRUD and reset**: point it only
+at a newly created disposable test database, never the development database.
+Allow `http://localhost:5190` in that API's `CORS_ORIGINS` and in the public
+Mapbox test token's allowed URLs. With the external Playwright module/executable
+configured as below, run:
+
+```bash
+TEST_API_URL=http://127.0.0.1:13065 \
+  PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs \
+  node frontend/test/deployment.browser.mjs
+```
+
+This uses the real API, PostgreSQL, browser CORS/preflights, flags and Mapbox at
+1440/390/320px. The 390px GET is held before continuing to the real API; the 320px
+first GET has a controlled network failure followed by a real retry. It checks
+configured URLs, country facts, CRUD/reset and clean page errors. It validates a
+local production build over HTTP, **not** live Render hosting, HTTPS or idle wake-up.
+
 The `loading` suite uses controlled GET responses and simulated time for the
 5-second explanation and 120-second timeout. It checks fast/delayed success,
 failure/retry, StrictMode request sharing, timer cleanup, keyboard, reduced motion
