@@ -48,7 +48,7 @@ Explore capital cities around the world on an interactive map. Discover countrie
 ### Prerequisites
 
 - Docker with Docker Compose v2
-- A [REST Countries API key](https://restcountries.com)
+- A [REST Countries API key](https://restcountries.com) for the first database initialization
 - A [public Mapbox token](https://account.mapbox.com)
 
 ### Environment Variables
@@ -102,9 +102,17 @@ See [development setup and troubleshooting](docs/development.md).
 ```text
 React + Vite + Zustand ──► Fastify REST API ──► PostgreSQL
         │                        ▲
-        ▼                        │ startup import
+        ▼                        │ first DB import
      Mapbox                REST Countries v5
 ```
+
+REST Countries is queried only during the **first successful initialization of a
+database**. Capitals, country metadata and the completion marker persist in
+PostgreSQL. Later backend starts make no REST Countries requests and need no API
+key; manual CRUD changes (including deletions) survive until an explicit reset.
+Existing populated databases receive a non-destructive metadata backfill on the
+first upgraded start. Failed imports roll back and can be retried. See the
+[initialization and recovery details](docs/technical-reference.md#backend).
 
 ## 🧪 Testing <a name="testing"></a>
 

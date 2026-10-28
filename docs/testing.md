@@ -15,7 +15,8 @@ git diff --check
 
 CI runs `npm ci`, `npm run check`, backend tests, frontend unit tests and Vite
 branding integration in separately named steps on PRs and main pushes, using the
-pinned runtime without secrets or a database. `npm test` still runs all suites;
+pinned runtime without secrets. The backend step uses an isolated PostgreSQL 16
+service, so all PostgreSQL suites run in CI. `npm test` still runs all suites;
 the frontend scripts `test:unit` and `test:branding` expose the same split locally.
 The job is limited to 10 minutes, with shorter per-step limits; Node tests and
 branding HTTP requests also have timeouts. Branding logs identify dev, build,
@@ -73,11 +74,28 @@ only that test container when the subshell exits, including when tests fail.
 It does not mount or modify the normal development database or its volumes.
 The integration suite uses `TEST_DATABASE_URL`, waits for PostgreSQL readiness,
 creates a uniquely named temporary schema, tests constraints, multi-page import,
-repeat imports, local edits, deletion/reimport, rollback, CRUD HTTP requests and DB-backed health,
+low-level repeat imports, rollback, CRUD HTTP requests and DB-backed health,
 then removes only that test schema. It never falls back to `DATABASE_URL` and
 skips these integration checks when `TEST_DATABASE_URL` is unset. REST Countries
-is still mocked; no real API key is needed. Real startup with a valid key should
-log import counts before the API begins listening.
+is still mocked; no real API key is needed. First startup with a valid key logs
+initialization/import counts before HTTP; subsequent startups log `mode: loaded` and do not call REST Countries.
+
+### Seed-once regression coverage
+
+[Issue #69 validation evidence](seed-once-validation.md) records the real PostgreSQL,
+Docker live/controlled-upstream, keyless restart and development smoke results.
+
+`backend/test/initialization-postgres.test.ts` exercises a fresh schema and complete
+paginated mock import, persisted metadata including countries without capitals,
+a separate backend pool boot with no key/network, real CRUD and intentionally
+empty data across restart, populated legacy migration without resurrecting rows,
+failed later pages, capital/metadata/marker-write rollback and retry, empty-source
+rejection, concurrent initializers with a short ordinary client timeout, and reset
+without metadata/marker changes. Each case owns a unique schema in the explicitly
+selected disposable database. `initialize-database.test.ts` also covers warm-path
+query behavior, missing keys, connection errors and uncertain COMMIT failures with
+safe errors. External fetches are controlled; actual persistence/locks/rollback
+are verified in PostgreSQL 16. The existing schema/CRUD/reset suites remain active.
 
 ## Coverage status
 

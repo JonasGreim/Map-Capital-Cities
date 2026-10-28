@@ -16,6 +16,7 @@ ENV NODE_ENV=production
 RUN npm ci --omit=dev --workspace backend --include-workspace-root=false && npm cache clean --force
 COPY --from=build /app/backend/dist ./backend/dist
 COPY db/default-capitals.json ./db/default-capitals.json
+COPY db/schema.sql ./db/schema.sql
 USER node
 EXPOSE 3001
 CMD ["npm", "run", "start", "-w", "backend"]
