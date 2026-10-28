@@ -21,8 +21,9 @@ the frontend scripts `test:unit` and `test:branding` expose the same split local
 The job is limited to 10 minutes, with shorter per-step limits; Node tests and
 branding HTTP requests also have timeouts. Branding logs identify dev, build,
 preview and cleanup phases. Import tests mock REST
-Countries; backend API tests inject a fake DB. Frontend tests use the existing
-Node test runner/tsx with mocked fetch and React server rendering; they need
+Countries; focused HTTP validation/error tests inject a small DB double, while
+CRUD persistence and constraints run against real PostgreSQL. Frontend tests use
+the existing Node test runner/tsx with mocked fetch and React server rendering; they need
 neither a browser nor a Mapbox token. The optional PostgreSQL suite skips
 unless `TEST_DATABASE_URL` is explicitly set (see below). Verify the real running
 API separately with `curl -i http://localhost:3001/health` after startup completes.
@@ -96,6 +97,17 @@ selected disposable database. `initialize-database.test.ts` also covers warm-pat
 query behavior, missing keys, connection errors and uncertain COMMIT failures with
 safe errors. External fetches are controlled; actual persistence/locks/rollback
 are verified in PostgreSQL 16. The existing schema/CRUD/reset suites remain active.
+
+## Backend test ownership
+
+The [Issue #75 audit](backend-test-audit.md) records removed overlaps and remaining
+proof. `capital-routes`, `health`, `deployment` and `reset` own HTTP validation,
+safe errors and protection policies. `import-capitals` exercises the production
+fetch/parser directly with controlled REST Countries responses, without a fake
+DB. `db` owns startup readiness; `initialize-database` owns controlled connection
+and uncertain-COMMIT failures plus the read-only warm path. The three PostgreSQL
+suites own actual constraints/CRUD/import transactions, seed-once restart/migration
+and reset atomicity/locking. Their commands and existing CI service are unchanged.
 
 ## Coverage status
 

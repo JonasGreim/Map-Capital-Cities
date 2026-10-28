@@ -30,7 +30,7 @@ test("completed startup needs no key, network, transaction or schema writes", as
   const result = await initializeDatabase(mock.db, undefined, async () => { throw new Error("Network must not be called"); });
   assert.equal(result.mode, "loaded");
   assert.equal(result.metadata.get("germany")?.population, 0);
-  assert.equal(mock.queries.length, 3);
+  assert.ok(mock.queries.every(sql => /^\s*SELECT\b/i.test(sql)), "Warm startup must be read-only");
   assert.equal(mock.destroyed(), false);
 });
 
@@ -41,13 +41,11 @@ test("a missing key rolls back initialization and never fetches", async () => {
   assert.equal(mock.destroyed(), true);
 });
 
-test("metadata, marker and commit failures roll back and suppress private DB errors", async () => {
-  for (const fail of ["INSERT INTO country_metadata", "INSERT INTO import_state", "COMMIT"]) {
-    const mock = database({ fail });
-    await assert.rejects(initializeDatabase(mock.db, "test", fetcher), { message: "PostgreSQL initialization could not be confirmed (check database permissions and schema)" });
-    assert.equal(mock.queries.at(-1), "ROLLBACK");
-    assert.equal(mock.destroyed(), true);
-  }
+test("uncertain commit fails safely and discards the connection", async () => {
+  const mock = database({ fail: "COMMIT" });
+  await assert.rejects(initializeDatabase(mock.db, "test", fetcher), { message: "PostgreSQL initialization could not be confirmed (check database permissions and schema)" });
+  assert.equal(mock.queries.at(-1), "ROLLBACK");
+  assert.equal(mock.destroyed(), true);
 });
 
 test("connection failure does not expose private connection details", async () => {
