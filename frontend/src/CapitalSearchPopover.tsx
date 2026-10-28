@@ -58,7 +58,7 @@ export function CapitalSearchPopover({ query, onQuery, capitals, total, loading,
     </div>
     <p id="compact-search-count" className="search-results-count" role="status">{!loading && !error ? `${capitals.length} of ${total} ${total === 1 ? "capital" : "capitals"}` : ""}</p>
     <div className="list-content" aria-busy={loading}>
-      {loading ? <p className="state-message" role="status">Loading capitals…</p>
+      {loading ? <p className="state-message">Loading capitals…</p>
         : error ? <div className="state-message"><p role="alert">{error}</p><button type="button" onClick={() => { input.current?.focus({ preventScroll: true }); void onRetry(); }}>Try again</button></div>
         : capitals.length === 0 ? <p className="state-message">{total ? "No matching capitals. Try another search or continent." : "No capitals available yet."}</p>
         : <ul className="capital-list">{capitals.map(capital => <li key={capital.id}>

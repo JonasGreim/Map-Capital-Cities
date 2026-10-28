@@ -12,11 +12,13 @@ const fields: CapitalFields = { ...input, latitude: "52.52", longitude: "13.405"
 afterEach(() => useCapitalStore.setState({ capitals: [], loading: false, error: null, mutating: false }));
 
 test("POST/PUT send complete numeric JSON without body id; DELETE accepts empty 204", async (t) => {
+  const timeout = t.mock.method(AbortSignal, "timeout", () => new AbortController().signal);
   const fetch = t.mock.method(globalThis, "fetch", async (_url: unknown, options?: RequestInit) =>
     options?.method === "DELETE" ? new Response(null, { status: 204 }) : Response.json(berlin, { status: options?.method === "POST" ? 201 : 200 }));
   assert.deepEqual(await createCapital(input), berlin);
   assert.deepEqual(await updateCapital(1, input), berlin);
   assert.equal(await deleteCapital(1), undefined);
+  assert.deepEqual(timeout.mock.calls.map(call => call.arguments), [[15_000], [15_000], [15_000]]);
   assert.deepEqual(fetch.mock.calls.map((call) => call.arguments[0]), ["/capital", "/capital/1", "/capital/1"]);
   for (const call of fetch.mock.calls.slice(0, 2)) {
     const options = call.arguments[1]!;

@@ -39,7 +39,8 @@ function isCapital(value: unknown): value is Capital {
 }
 
 export async function getCapitals(): Promise<Capital[]> {
-  const signal = AbortSignal.timeout(15_000);
+  // Free demo hosting may need about a minute to wake up. Writes keep their short budget.
+  const signal = AbortSignal.timeout(120_000);
   const timeoutMessage = "The capital API took too long to respond. Please try again.";
   let response: Response;
   try {

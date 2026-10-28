@@ -8,14 +8,14 @@ import { useCapitalStore } from "../src/capital-store";
 
 const berlin = { id: 1, name: "Berlin", country: "Germany", latitude: 52.52, longitude: 13.405 };
 
-afterEach(() => { useCapitalStore.setState({ capitals: [], loading: false, error: null }); });
+afterEach(() => { useCapitalStore.setState({ capitals: [], loading: false, hasLoaded: false, error: null }); });
 
 test("API requests the plain capital array with native fetch", async (t) => {
   const signal = new AbortController().signal;
   const timeoutMock = t.mock.method(AbortSignal, "timeout", () => signal);
   const fetchMock = t.mock.method(globalThis, "fetch", async () => Response.json([berlin]));
   assert.deepEqual(await getCapitals(), [berlin]);
-  assert.deepEqual(timeoutMock.mock.calls[0].arguments, [15_000]);
+  assert.deepEqual(timeoutMock.mock.calls[0].arguments, [120_000]);
   assert.deepEqual(fetchMock.mock.calls[0].arguments, ["/capital", { headers: { Accept: "application/json" }, signal }]);
 });
 
@@ -67,9 +67,11 @@ test("store releases a timed-out request and retry uses a fresh signal", async (
   await request;
   assert.equal(useCapitalStore.getState().loading, false);
   assert.equal(useCapitalStore.getState().error, "The capital API took too long to respond. Please try again.");
+  assert.equal(useCapitalStore.getState().hasLoaded, false);
   await fetchCapitals();
   assert.equal(attempts, 2);
   assert.equal(useCapitalStore.getState().error, null);
+  assert.equal(useCapitalStore.getState().hasLoaded, true);
   assert.deepEqual(useCapitalStore.getState().capitals, [berlin]);
 });
 
@@ -138,11 +140,11 @@ test("skip link is available before the long list, including loading and error s
   }
 });
 
-test("list announces loading and hides stale data", () => {
+test("list marks results busy and hides stale data while the app announces loading", () => {
   const html = renderToStaticMarkup(<CapitalActions><CapitalList capitals={[berlin]} loading={true} error={null} onRetry={async () => {}} /></CapitalActions>);
   assert.match(html, /aria-busy="true"/);
   assert.match(html, /role="region" aria-label="Capital results" aria-busy="true" tabindex="0"/);
-  assert.match(html, /role="status">Loading capitals…/);
+  assert.match(html, /class="state-message">Loading capitals…/);
   assert.doesNotMatch(html, /Berlin|Try again/);
 });
 

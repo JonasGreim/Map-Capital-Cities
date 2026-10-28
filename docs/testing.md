@@ -276,6 +276,11 @@ for the matrix and limits; these checks do not establish physical-device behavio
 
 ## Browser runner and CI prerequisite
 
+The `loading` suite uses controlled GET responses and simulated time for the
+5-second explanation and 120-second timeout. It checks fast/delayed success,
+failure/retry, StrictMode request sharing, timer cleanup, keyboard, reduced motion
+and unchanged layout at 320/390/1440px, with real Mapbox markers after success.
+
 `frontend/test/marker-colors.browser.mjs` covers reload persistence, swatches,
 filter/search/read stability, CRUD ID cleanup, confirmed/failed reset and blocked
 storage at 1440×900, 390×844 and 320×568 with every capital request mocked.

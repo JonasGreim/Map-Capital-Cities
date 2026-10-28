@@ -115,7 +115,7 @@ export function CapitalList({ capitals, loading, error, onRetry, collapsed = fal
       </p>
       <div ref={results} className="list-content" role="region" aria-label="Capital results" aria-busy={loading} tabIndex={0}>
         {loading ? (
-          <p className="state-message" role="status">Loading capitals…</p>
+          <p className="state-message">Loading capitals…</p>
         ) : error ? (
           <div className="state-message">
             <p role="alert">{error}</p>
