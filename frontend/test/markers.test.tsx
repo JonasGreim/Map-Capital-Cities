@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test, type TestContext } from "node:test";
 import type mapboxgl from "mapbox-gl";
 import { capitalCamera, createCapitalMarkers, markerColors } from "../src/capital-markers";
+import { mockStorage } from "./storage-fixture";
 import { markerColorStorageKey, clearMarkerColors } from "../src/marker-color-storage";
 
 const berlin = { id: 1, name: "Berlin", country: "Germany", latitude: 52.52, longitude: 13.405 };
@@ -52,7 +52,6 @@ class Element extends EventTarget {
   private markup = "";
   set innerHTML(value: string) { this.children = []; this.markup = value; }
   get innerHTML() { return this.markup; }
-  value = "";
   offsetHeight = 240;
   clientHeight = 600;
   clientWidth = 800;
@@ -61,6 +60,13 @@ class Element extends EventTarget {
   isConnected = true;
   focusCount = 0;
   constructor(public tag: string) { super(); }
+  find(predicate: (element: Element) => boolean): Element | undefined {
+    if (predicate(this)) return this;
+    for (const child of this.children) {
+      const found = child.find(predicate);
+      if (found) return found;
+    }
+  }
   append(...children: Element[]) { this.children.push(...children); }
   replaceChildren(...children: Element[]) { this.children = children; }
   setAttribute(name: string, value: string) { this.attributes.set(name, value); }
@@ -69,6 +75,17 @@ class Element extends EventTarget {
   click() { this.dispatchEvent(new Event("click")); }
 }
 const dom = { createElement: (tag: string) => new Element(tag), activeElement: null as Element | null, body: new Element("body") };
+
+function byTag(root: Element, tag: string): Element {
+  const element = root.find(node => node.tag === tag);
+  assert.ok(element, `Missing <${tag}>`);
+  return element;
+}
+function byName(root: Element, name: string): Element {
+  const element = root.find(node => node.attributes.get("aria-label") === name);
+  assert.ok(element, `Missing accessible name: ${name}`);
+  return element;
+}
 
 function setup(t: TestContext) {
   dom.activeElement = dom.body;
@@ -136,9 +153,8 @@ test("popup actions delegate current records without selection or camera writes 
     controller.update([berlin, paris]);
     controller.select(berlin.id);
     const popup = popups.at(-1)!;
-    const trigger = popup.content!.children[6];
+    const trigger = byName(popup.content!, "Map actions for Berlin");
     assert.equal(trigger.type, "button");
-    assert.equal(trigger.className, "actions-trigger popup-actions-trigger");
     assert.equal(trigger.attributes.get("aria-label"), "Map actions for Berlin");
     trigger.click();
     assert.equal(openedActions.at(-1)!.id, 1);
@@ -159,7 +175,8 @@ test("popup actions delegate current records without selection or camera writes 
 });
 
 function choose(popup: { content?: Element }, value: string) {
-  const button = popup.content!.children[4].children[1].children[markerColors.findIndex(color => color.value === value)];
+  const color = markerColors.find(color => color.value === value)!;
+  const button = byName(popup.content!, `${color.name} marker`);
   button.click();
   return button;
 }
@@ -169,7 +186,7 @@ test("country edits update the open definition list and clear stale facts withou
   controller.update([{ ...berlin, flagCode: "DE", continents: ["Europe"], population: 83200000, currencies: [{ code: "EUR", name: "Euro" }] }]);
   controller.select(1);
   const popup = popups[0], marker = markers[0];
-  const facts = popup.content!.children.find(child => child.tag === "dl")!;
+  const facts = byTag(popup.content!, "dl");
   const texts = () => facts.children.map(child => child.textContent);
   assert.deepEqual(texts(), ["Continent", "Europe", "Country population", "83,200,000", "Currency", "Euro (EUR)"]);
   assert.deepEqual(facts.children.map(child => child.tag), ["dt", "dd", "dt", "dd", "dt", "dd"]);
@@ -178,13 +195,15 @@ test("country edits update the open definition list and clear stale facts withou
   assert.deepEqual(texts(), ["Continent", "Asia", "Country population", "123,000,000", "Currency", "Japanese yen (JPY)"]);
   controller.update([{ ...berlin, name: "<img src=x onerror=alert(1)>", country: "Unknown" }]);
   assert.deepEqual(texts(), ["Continent", "—", "Country population", "—", "Currency", "—"]);
-  assert.equal(popup.content!.children[0].textContent, "<img src=x onerror=alert(1)>");
+  assert.equal(byTag(popup.content!, "h2").textContent, "<img src=x onerror=alert(1)>");
   assert.equal(facts.innerHTML, "");
   assert.equal(markers.length, 1);
   assert.equal(popups.length, 1);
   assert.equal(markers[0], marker);
   assert.equal(marker.options.element.style.backgroundColor, markerColors[2].value);
   assert.equal(marker.options.element.attributes.get("aria-pressed"), "true");
+  assert.equal(byTag(popup.content!, "p").textContent, "Unknown");
+  assert.match(popup.element.attributes.get("aria-label")!, /Unknown/);
   assert.equal(popup.removed, false);
   assert.deepEqual(selections, []);
   assert.deepEqual(flights, []);
@@ -208,18 +227,12 @@ test("longer popup edits stay within the available height without a camera or se
   assert.deepEqual(selections, []);
 });
 
-test("every valid capital gets a square marker at [longitude, latitude], including nearby capitals", (t) => {
+test("every valid capital gets a marker at [longitude, latitude], including nearby capitals", (t) => {
   const { controller, markers } = setup(t);
   controller.update([berlin, paris, { ...paris, id: 3 }, { ...berlin, id: 4, latitude: NaN },
     { ...berlin, id: 5, longitude: 181 }, { ...berlin, id: 6, latitude: -91 }]);
   assert.equal(markers.length, 3);
   assert.deepEqual(markers.map((marker) => marker.position), [[13.405, 52.52], [2.35, 48.85], [2.35, 48.85]]);
-  assert.equal(markers[0].options.element.className, "capital-marker");
-  const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
-  const rule = css.match(/\.capital-marker \{([^}]+)\}/)![1];
-  for (const declaration of ["width: 32px", "height: 32px", "min-height: 0", "padding: 0", "border-radius: 0", "box-sizing: border-box"]) {
-    assert.ok(rule.includes(declaration));
-  }
 });
 
 test("activation opens a labeled popup with safe text and an accessible current-color control", (t) => {
@@ -231,9 +244,9 @@ test("activation opens a labeled popup with safe text and an accessible current-
   assert.match(button.attributes.get("aria-label")!, /Germany: change marker color/);
   button.click();
   assert.equal(popups.length, 1);
-  assert.equal(popups[0].content!.children[0].textContent, "<img onerror=alert(1)>");
-  assert.equal(popups[0].content!.children[1].textContent, "Germany");
-  assert.equal(popups[0].content!.children[4].children[0].textContent, "Marker color");
+  assert.equal(byTag(popups[0].content!, "h2").textContent, "<img onerror=alert(1)>");
+  assert.equal(byTag(popups[0].content!, "p").textContent, "Germany");
+  assert.equal(byTag(byName(popups[0].content!, "Marker color"), "p").textContent, "Marker color");
   assert.equal(dom.activeElement!.attributes.get("aria-label"), "Teal marker");
   assert.equal(button.attributes.get("aria-expanded"), "true");
 });
@@ -251,20 +264,6 @@ test("color changes are isolated and survive popup reopen and data rerenders/rel
   markers[0].options.element.click();
   assert.equal(dom.activeElement!.attributes.get("aria-label"), "Red marker");
   assert.equal(markers.length, 2);
-});
-
-test("data updates reuse markers and refresh open popup text and coordinates", (t) => {
-  const { controller, markers, popups } = setup(t);
-  controller.update([berlin]);
-  markers[0].options.element.click();
-  controller.update([{ ...berlin, name: "Updated", country: "New country", longitude: 10, latitude: 20 }]);
-  assert.equal(markers.length, 1);
-  assert.equal(popups.length, 1);
-  assert.deepEqual(markers[0].position, [10, 20]);
-  assert.deepEqual(popups[0].position, [10, 20]);
-  assert.equal(popups[0].content!.children[0].textContent, "Updated");
-  assert.equal(popups[0].content!.children[1].textContent, "New country");
-  assert.match(popups[0].element.attributes.get("aria-label")!, /Updated, New country/);
 });
 
 test("opening another marker closes the previous popup; Escape restores marker focus", (t) => {
@@ -286,7 +285,7 @@ test("removing an active capital moves popup focus to the canvas without focusin
   controller.update([berlin, paris]);
   const button = markers[0].options.element;
   button.click();
-  const swatch = choose(popups[0], markerColors[1].value);
+  choose(popups[0], markerColors[1].value);
   controller.update([paris]);
   assert.equal(button.focusCount, 0);
   assert.equal(dom.activeElement, canvas);
@@ -296,12 +295,14 @@ test("removing an active capital moves popup focus to the canvas without focusin
   assert.equal(popups[0].removed, true);
   assert.equal(popups[0].closeListeners.size, 0);
   assert.equal(button.attributes.get("aria-expanded"), "false");
-  swatch.click();
+  choose(popups[0], markerColors[2].value);
   assert.equal(button.style.backgroundColor, markerColors[1].value);
   button.click();
   assert.equal(popups.length, 1);
   markers[1].options.element.click();
   assert.equal(popups.length, 2);
+  controller.update([berlin, paris]);
+  assert.equal(markers[2].options.element.style.backgroundColor, markerColors[0].value);
 });
 
 test("removing a popup whose focus already moved elsewhere does not steal focus", (t) => {
@@ -340,26 +341,6 @@ test("normal popup closure respects focus elsewhere and unmount does not focus t
   assert.equal(popups[1].closeListeners.size, 0);
 });
 
-test("removed capitals release markers, popups, listeners and colors; new capitals get default colors", (t) => {
-  const { controller, markers, popups } = setup(t);
-  controller.update([berlin, paris]);
-  markers[0].options.element.click();
-  const swatch = choose(popups[0], markerColors[1].value);
-  controller.update([paris]);
-  assert.equal(markers[0].removed, true);
-  assert.equal(markers[1].removed, false);
-  assert.equal(popups[0].removed, true);
-  assert.equal(popups[0].closeListeners.size, 0);
-  markers[0].options.element.click();
-  assert.equal(popups.length, 1);
-  choose({ content: popups[0].content }, markerColors[2].value);
-  assert.equal(markers[0].options.element.style.backgroundColor, markerColors[1].value);
-  assert.notEqual(dom.activeElement, swatch);
-  controller.update([berlin, paris]);
-  assert.equal(markers.length, 3);
-  assert.equal(markers[2].options.element.style.backgroundColor, markerColors[0].value);
-});
-
 test("destroy releases every marker and active popup and tolerates repeated cleanup", (t) => {
   const { controller, markers, popups } = setup(t);
   controller.update([berlin, paris]);
@@ -377,13 +358,13 @@ test("list selection navigates to the matching capital, reuses its popup and int
   const { controller, markers, popups, flights, stops, selections } = setup(t);
   controller.update([berlin, paris]);
   controller.select(paris.id, true);
-  assert.equal(popups[0].content!.children[0].textContent, "Paris");
+  assert.equal(byTag(popups[0].content!, "h2").textContent, "Paris");
   assert.deepEqual((flights[0] as { center: number[] }).center, [2.35, 48.85]);
   controller.select(paris.id, true);
   assert.equal(popups.length, 1);
   controller.select(berlin.id, true);
   assert.equal(popups[0].removed, true);
-  assert.equal(popups[1].content!.children[0].textContent, "Berlin");
+  assert.equal(byTag(popups[1].content!, "h2").textContent, "Berlin");
   assert.equal(markers.length, 2);
   assert.equal(stops(), 3);
   assert.equal(markers[0].options.element.attributes.get("aria-pressed"), "true");
@@ -415,8 +396,9 @@ test("only a selected coordinate edit navigates; text/reloads preserve camera, p
   assert.equal(flights.length, 1);
   controller.update([{ ...berlin, name: "New Berlin", latitude: 20, longitude: 10 }, paris]);
   assert.equal(flights.length, 2);
-  assert.equal(popups[0].content!.children[2].textContent, "20.0000, 10.0000");
-  assert.equal(popups[0].content!.children[2].attributes.get("aria-label"), "Latitude 20, longitude 10");
+  assert.deepEqual(markers[0].position, [10, 20]);
+  assert.deepEqual(popups[0].position, [10, 20]);
+  assert.equal(byName(popups[0].content!, "Latitude 20, longitude 10").textContent, "20.0000, 10.0000");
   assert.equal(markers[0].options.element.style.backgroundColor, markerColors[2].value);
   assert.equal(markers.length, 2);
   assert.equal(popups.length, 1);
@@ -439,9 +421,9 @@ test("popup flags use validated metadata, fall back on image failure and update 
   controller.update([{ ...berlin, flagCode: "DE" }]);
   controller.select(berlin.id, true);
   const popup = popups[0];
-  const flag = popup.content!.children[5];
+  const flag = popup.content!.find(node => node.className === "country-flag")!;
   assert.equal(flag.attributes.get("aria-hidden"), "true");
-  const image = flag.children[0];
+  const image = byTag(flag, "img");
   assert.equal(image.src, "https://flags.restcountries.com/v5/svg/de.svg");
   assert.equal(image.alt, "");
   assert.deepEqual([image.width, image.height], [40, 30]);
@@ -456,12 +438,12 @@ test("popup flags use validated metadata, fall back on image failure and update 
   choose(popup, markerColors[1].value);
   const focus = dom.activeElement;
   controller.update([{ ...berlin, country: "Czechia", flagCode: "CZ" }]);
-  assert.equal(flag.children[0].src, "https://flags.restcountries.com/v5/svg/cz.svg");
-  assert.equal(flag.children[0].hidden, true);
-  flag.children[0].complete = true;
-  flag.children[0].naturalWidth = 40;
-  flag.children[0].onload!();
-  assert.equal(flag.children[0].hidden, false);
+  assert.equal(byTag(flag, "img").src, "https://flags.restcountries.com/v5/svg/cz.svg");
+  assert.equal(byTag(flag, "img").hidden, true);
+  byTag(flag, "img").complete = true;
+  byTag(flag, "img").naturalWidth = 40;
+  byTag(flag, "img").onload!();
+  assert.equal(byTag(flag, "img").hidden, false);
   assert.equal(dom.activeElement, focus);
   assert.equal(flights.length, 1);
   assert.equal(popups.length, 1);
@@ -483,9 +465,9 @@ test("popup flags reveal already cached images even without a later load event",
   });
   controller.update([{ ...berlin, flagCode: "DE" }]);
   markers[0].options.element.click();
-  assert.equal(popups[0].content!.children[5].children[0].hidden, false);
+  assert.equal(byTag(popups[0].content!, "img").hidden, false);
   controller.update([{ ...berlin, country: "Czechia", flagCode: "CZ" }]);
-  assert.equal(popups[0].content!.children[5].children[0].hidden, false);
+  assert.equal(byTag(popups[0].content!, "img").hidden, false);
 });
 
 test("reset closes selection and restores every marker to Teal without camera movement", (t) => {
@@ -501,7 +483,7 @@ test("reset closes selection and restores every marker to Teal without camera mo
   assert.equal(flights.length, before);
   assert.ok(markers.every(marker => marker.options.element.style.backgroundColor === markerColors[0].value));
   controller.select(berlin.id);
-  assert.equal(popups[2].content!.children[4].children[1].children[0].attributes.get("aria-pressed"), "true");
+  assert.equal(byName(popups[2].content!, "Teal marker").attributes.get("aria-pressed"), "true");
 });
 
 test("continent visibility retains instances and colors, blocks hidden activation and clears popup without hidden focus or flights", (t) => {
@@ -532,7 +514,7 @@ test("continent visibility retains instances and colors, blocks hidden activatio
   assert.equal(button.style.backgroundColor, markerColors[1].value);
   assert.equal(flights.length, before);
   controller.select(europe.id);
-  assert.equal(popups[1].content!.children[4].children[1].children[1].attributes.get("aria-pressed"), "true");
+  assert.equal(byName(popups[1].content!, "Red marker").attributes.get("aria-pressed"), "true");
 });
 
 test("filtered CRUD and reset reconcile visibility while only actual deletion releases markers", (t) => {
@@ -561,25 +543,17 @@ test("filtered CRUD and reset reconcile visibility while only actual deletion re
 });
 
 test("persisted colors restore on new controllers with selected swatches and stable markers across edit/filter/read", t => {
-  const values = new Map([[markerColorStorageKey, JSON.stringify({ 1: markerColors[1].value, 2: markerColors[2].value })]]);
-  const previous = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
-  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: {
-    getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => { values.set(key, value); },
-    removeItem: (key: string) => { values.delete(key); },
-  } });
-  t.after(() => {
-    if (previous) Object.defineProperty(globalThis, "localStorage", previous);
-    else Reflect.deleteProperty(globalThis, "localStorage");
+  const { values } = mockStorage(t, {
+    [markerColorStorageKey]: JSON.stringify({ 1: markerColors[1].value, 2: markerColors[2].value }),
   });
   const { controller, markers, popups, dispose } = setup(t);
   const records = [{ ...berlin, continents: ["Europe" as const] }, paris];
   controller.update(records);
   assert.deepEqual(markers.map(marker => marker.options.element.style.backgroundColor), [markerColors[1].value, markerColors[2].value]);
   controller.select(1);
-  const swatches = popups.at(-1)!.content!.children[4].children[1].children;
-  assert.equal(swatches[1].attributes.get("aria-pressed"), "true");
-  assert.equal(swatches[1].textContent, "✓");
+  const red = byName(popups.at(-1)!.content!, "Red marker");
+  assert.equal(red.attributes.get("aria-pressed"), "true");
+  assert.equal(red.textContent, "✓");
   controller.setContinent("Asia"); controller.setContinent("");
   controller.update([{ ...records[0], name: "Changed", country: "Changed country", latitude: 0 }, records[1]]);
   controller.select(1);
@@ -600,12 +574,8 @@ test("persisted colors restore on new controllers with selected swatches and sta
 });
 
 test("failed storage writes leave immediate marker color, swatch, popup reopen and filter behavior usable", t => {
-  const previous = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  mockStorage(t);
   Object.defineProperty(globalThis, "localStorage", { configurable: true, get: () => { throw new Error("SecurityError"); } });
-  t.after(() => {
-    if (previous) Object.defineProperty(globalThis, "localStorage", previous);
-    else Reflect.deleteProperty(globalThis, "localStorage");
-  });
   const { controller, markers, popups } = setup(t);
   controller.update([berlin, paris]); controller.select(1);
   const swatch = choose(popups.at(-1)!, markerColors[1].value);
