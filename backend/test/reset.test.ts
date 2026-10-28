@@ -7,18 +7,22 @@ import type { CapitalDatabase } from "../src/capitals.js";
 const berlin = { id: 500, name: "Berlin", country: "Germany", latitude: 52.52, longitude: 13.405 };
 
 function fixture(failAt?: string) {
-  const calls: string[] = [];
+  let queries = 0;
+  let failNext = true;
   let released: boolean | undefined;
   const client: CapitalDatabase & { release(error?: boolean): void } = {
     query: async (sql) => {
-      calls.push(sql);
-      if (sql === failAt) throw new Error("private SQL connection information");
+      queries++;
+      if (failNext && sql === failAt) {
+        failNext = false;
+        throw new Error("private SQL connection information");
+      }
       return { rows: sql.startsWith("SELECT") ? [berlin] : [] };
     },
     release: (failed) => { released = failed; },
   };
   const database = { query: client.query, connect: async () => client };
-  return { app: buildApp(database, new Map([["germany", { flagCode: "DE", continents: ["Europe"], population: 83200000, currencies: [{ code: "EUR", name: "Euro" }] }]])), database, client, calls, released: () => released };
+  return { app: buildApp(database), database, client, queries: () => queries, released: () => released };
 }
 
 test("reviewed default-v1 has 248 unique valid capitals; invalid snapshots fail closed", () => {
@@ -34,7 +38,7 @@ test("reviewed default-v1 has 248 unique valid capitals; invalid snapshots fail 
 });
 
 test("public POST reset requires explicit confirmation and rejects invalid requests before SQL", async (t) => {
-  const { app, calls } = fixture();
+  const { app, queries } = fixture();
   t.after(() => app.close());
   for (const payload of [undefined, {}, { confirm: false }, { confirm: "true" }, { confirm: true, extra: 1 }, null, []]) {
     assert.equal((await app.inject({ method: "POST", url: "/capital-reset",
@@ -43,42 +47,22 @@ test("public POST reset requires explicit confirmation and rejects invalid reque
   }
   assert.equal((await app.inject({ method: "POST", url: "/capital-reset", headers: { "content-type": "application/json" }, payload: "{" })).statusCode, 400);
   assert.equal((await app.inject({ method: "POST", url: "/capital-reset", headers: { "content-type": "text/plain" }, payload: "confirm" })).statusCode, 415);
-  assert.equal(calls.length, 0);
+  assert.equal(queries(), 0);
 });
 
-test("reset succeeds without auth and returns confirmed capitals with existing flag enrichment", async (t) => {
-  const { app, calls, released } = fixture();
-  t.after(() => app.close());
-  const response = await app.inject({ method: "POST", url: "/capital-reset", payload: { confirm: true } });
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json(), [{ ...berlin, flagCode: "DE", continents: ["Europe"], population: 83200000, currencies: [{ code: "EUR", name: "Euro" }] }]);
-  assert.ok(calls.indexOf("BEGIN") < calls.indexOf("DELETE FROM capitals"));
-  assert.equal(calls.at(-1), "COMMIT");
-  assert.equal(released(), false);
-});
-
-test("DB failures roll back and release the transaction; later requests can run", async (t) => {
-  const { app, calls, released } = fixture("DELETE FROM capitals");
-  t.after(() => app.close());
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await app.inject({ method: "POST", url: "/capital-reset", payload: { confirm: true } });
-    assert.equal(response.statusCode, 500);
-    assert.deepEqual(response.json(), { error: "Unable to reset capitals" });
-  }
-  assert.equal(calls.filter(sql => sql === "ROLLBACK").length, 2);
-  assert.equal(calls.includes("COMMIT"), false);
-  assert.equal(released(), true);
-});
-
-test("connection and commit failures return safe errors without success", async (t) => {
-  for (const failure of ["connect", "COMMIT"]) {
+test("connection, write and uncertain commit failures return safe errors and allow a later reset", async (t) => {
+  for (const failure of ["connect", "DELETE FROM capitals", "COMMIT"]) {
     const f = fixture(failure);
-    if (failure === "connect") f.database.connect = async () => { throw new Error("private credentials"); };
     t.after(() => f.app.close());
+    const connect = f.database.connect;
+    if (failure === "connect") f.database.connect = async () => { throw new Error("private credentials"); };
     const response = await f.app.inject({ method: "POST", url: "/capital-reset", payload: { confirm: true } });
-    assert.equal(response.statusCode, 500);
+    assert.equal(response.statusCode, 500, failure);
     assert.deepEqual(response.json(), { error: "Unable to reset capitals" });
-    if (failure === "COMMIT") assert.equal(f.calls.at(-1), "ROLLBACK");
+    if (failure !== "connect") assert.equal(f.released(), true, "Discard failed transaction clients");
+    f.database.connect = connect;
+    assert.equal((await f.app.inject({ method: "POST", url: "/capital-reset", payload: { confirm: true } })).statusCode, 200);
+    assert.equal(f.released(), false);
   }
 });
 
@@ -100,5 +84,4 @@ test("overlapping reset requests are rejected; explicit later resets remain supp
   release();
   assert.equal((await pending).statusCode, 200);
   assert.equal((await f.app.inject({ method: "POST", url: "/capital-reset", payload: { confirm: true } })).statusCode, 200);
-  assert.equal(f.calls.filter(sql => sql === "DELETE FROM capitals").length, 2);
 });

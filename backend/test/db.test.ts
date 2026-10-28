@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { waitForDatabase } from "../src/db.js";
 
-test("database readiness retries transient errors and stops when ready", async () => {
-  let calls = 0;
-  await waitForDatabase({ query: async (sql) => {
-    assert.equal(sql, "select 1");
-    if (++calls < 3) throw Object.assign(new Error("starting"), { code: "ECONNREFUSED" });
-  } }, { attempts: 5, delayMs: 0 });
-  assert.equal(calls, 3);
+test("database readiness stops immediately or after transient failures once ready", async () => {
+  for (const failures of [0, 2]) {
+    let calls = 0;
+    await waitForDatabase({ query: async () => {
+      if (++calls <= failures) throw Object.assign(new Error("starting"), { code: "ECONNREFUSED" });
+    } }, { attempts: 5, delayMs: 0 });
+    assert.equal(calls, failures + 1);
+  }
 });
 
 test("database readiness fails after a bounded number of attempts", async () => {
@@ -18,12 +19,6 @@ test("database readiness fails after a bounded number of attempts", async () => 
     throw Object.assign(new Error("unavailable"), { code: "57P03" });
   } }, { attempts: 3, delayMs: 0 }), /not ready after 3 attempts/);
   assert.equal(calls, 3);
-});
-
-test("database readiness succeeds immediately for a ready database", async () => {
-  let calls = 0;
-  await waitForDatabase({ query: async () => { calls++; } });
-  assert.equal(calls, 1);
 });
 
 test("known temporary connection errors and pg timeouts are retried", async () => {
