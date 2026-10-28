@@ -23,8 +23,20 @@ its CI checks pass. No separate frontend Docker server is needed on Render.
 
 The backend image already contains `db/schema.sql` and `db/default-capitals.json`.
 It binds to `0.0.0.0:$PORT` (Render supplies the port; local default remains 3001).
-The static build pins Node 24.22.1 and installs npm 11.19.1 before root `npm ci`
-with development tools. `SKIP_INSTALL_DEPS` avoids Render's earlier implicit install.
+The static build pins Node 24.22.1 and uses Render's provided npm to install the
+root workspaces, including development tools, and build the frontend:
+
+```bash
+npm ci --include=dev && npm run build -w frontend
+```
+
+Node 24.22.1 [bundles npm 11.19.1](https://github.com/nodejs/node/blob/v24.22.1/deps/npm/package.json),
+matching the repository's npm version; no version override is needed. A global
+npm installation attempts to modify Render's read-only system installation
+(`/usr/lib/node_modules/npm`) and fails with `EROFS` before dependency installation.
+`SKIP_INSTALL_DEPS` avoids Render's earlier implicit install. Local validation
+does not establish that the actual Render deployment succeeds; verify its build
+logs after deployment.
 
 ## Owner setup in the Render Dashboard
 
