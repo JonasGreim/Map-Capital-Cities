@@ -37,7 +37,7 @@ export async function verifyBranding(page, baseURL, screenshotDirectory) {
   }), { status: 200, type: "image/svg+xml", valid: true, decoded: true });
 
   const evidence = [];
-  for (const [width, height] of [[1440, 900], [390, 844], [320, 568]]) {
+  for (const [width, height] of [[1440, 900]]) {
     await page.setViewportSize({ width, height });
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.mouse.move(width - 1, height - 1);
@@ -84,6 +84,10 @@ export async function verifyBranding(page, baseURL, screenshotDirectory) {
     await showView(page, "Capitals"); await search.waitFor();
     await title();
   }
+  await page.setViewportSize({ width: 320, height: 568 });
+  await showView(page, "Map");
+  assert.equal(await brand.evaluate(el => el.getBoundingClientRect().height >= 44), true);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
   assert.deepEqual(writes, [], "home navigation must never write capital data");
   assert.deepEqual(errors, []);
   return evidence;

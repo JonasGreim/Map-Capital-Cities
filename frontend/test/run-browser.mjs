@@ -1,59 +1,93 @@
-/* global process, console, document */
-import { URL, fileURLToPath } from "node:url";
+/* global process, console, URL, setTimeout, clearTimeout */
+import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+import { performance } from "node:perf_hooks";
+import { chromium } from "playwright";
 import { createServer } from "vite";
-import { verifyMarkerColors } from "./marker-colors.browser.mjs";
-import { verifyFlags } from "./flags.browser.mjs";
-import { verifyMapSelection } from "./map-selection.browser.mjs";
-import { verifySidebarControls } from "./sidebar-controls.browser.mjs";
-import { verifySidebarRail } from "./sidebar-rail.browser.mjs";
-import { verifySidebar } from "./sidebar.browser.mjs";
-import { verifyContinents } from "./continents.browser.mjs";
-import { verifyReset } from "./reset.browser.mjs";
-import { verifySidebarPolish } from "./sidebar-polish.browser.mjs";
-import { verifyBranding } from "./branding.browser.mjs";
-import { verifyPopupActions } from "./popup-actions.browser.mjs";
-import { verifyCoordinatePicker } from "./coordinate-picker.browser.mjs";
-import { verifyMapErrors } from "./map-errors.browser.mjs";
-import { verifyMobileResponsive } from "./mobile-responsive.browser.mjs";
-import { verifyMobileNavigation } from "./mobile-navigation.browser.mjs";
-import { verifyToast } from "./toast.browser.mjs";
-import { verifyMapNavigation } from "./map-navigation.browser.mjs";
+import { verifySmoke } from "./smoke.browser.mjs";
 import { verifyLoading } from "./loading.browser.mjs";
+import { verifyLayout } from "./layout.browser.mjs";
+import { verifyBranding } from "./branding.browser.mjs";
+import { verifyMap } from "./map.browser.mjs";
+import { verifyCoordinatePicker } from "./coordinate-picker.browser.mjs";
+import { verifyFlags } from "./flags.browser.mjs";
+import { verifyMapErrors } from "./map-errors.browser.mjs";
 
-// Reuse externally supplied Playwright tooling; no extra project dependency.
-const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
-const server = await createServer({
-  root: fileURLToPath(new URL("..", import.meta.url)),
-  server: { host: "localhost", port: 5188, strictPort: true },
-});
-let browser;
+const mode = process.argv[2];
+assert.ok(["--smoke", "--full"].includes(mode), "Use --smoke or --full");
+const suites = [
+  { name: "smoke", verify: verifySmoke, smoke: true },
+  { name: "loading", verify: verifyLoading, smoke: true },
+  { name: "layout", verify: verifyLayout },
+  { name: "branding", verify: verifyBranding },
+  { name: "map", verify: verifyMap, mapbox: true },
+  { name: "coordinate-picker", verify: verifyCoordinatePicker, mapbox: true },
+  { name: "flags", verify: verifyFlags, mapbox: true },
+  ...["construction", "style"].map(error => ({ name: `map-errors-${error}`, mapbox: true,
+    verify: (page, url) => verifyMapErrors(page, url, error) })),
+];
+const requested = process.env.BROWSER_SUITES?.split(",");
+if (requested) for (const name of requested) assert.ok(suites.some(s => s.name === name && (mode === "--full" || s.smoke)), `Unknown suite for ${mode}: ${name}`);
+const selected = suites.filter(s => (mode === "--full" || s.smoke) && (!requested || requested.includes(s.name)));
+const root = fileURLToPath(new URL("..", import.meta.url));
+const baseURL = "http://localhost:5188";
+let server, browser, context;
 const failures = [];
+const deadline = setTimeout(() => { console.error("Browser runner exceeded its 8-minute deadline"); process.exit(1); }, 480_000);
+async function cleanup() {
+  try { await browser?.close(); }
+  finally { await server?.close(); }
+}
+for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => {
+  void cleanup().finally(() => process.exit(1));
+});
 try {
-  if (!server.config.env.VITE_MAPBOX_TOKEN) throw new Error("Browser regressions require VITE_MAPBOX_TOKEN in the environment or root .env");
-  await server.listen();
-  browser = await chromium.launch({
-    headless: true,
+  browser = await chromium.launch({ headless: true, timeout: 30_000,
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
-    args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
-  });
-  for (const [name, verify] of [["loading", verifyLoading], ["map-navigation", verifyMapNavigation], ["sidebar-controls", verifySidebarControls], ["sidebar-rail", verifySidebarRail], ["mobile-responsive", verifyMobileResponsive], ["mobile-navigation", verifyMobileNavigation], ["toast", verifyToast], ["coordinate-picker", verifyCoordinatePicker], ["marker-colors", verifyMarkerColors], ["branding", verifyBranding], ["flags", verifyFlags], ["selection", verifyMapSelection], ["sidebar", verifySidebar], ["reset", verifyReset], ["continents", verifyContinents], ["sidebar-polish", verifySidebarPolish], ["popup-actions", verifyPopupActions],
-    ...["success", "construction-error", "initial-style-error", "no-token"].map(mode => [`map-errors-${mode}`, (page, url) => verifyMapErrors(page, url, mode)])]) {
-    if (process.env.BROWSER_SUITES && !process.env.BROWSER_SUITES.split(",").includes(name)) continue;
-    const context = await browser.newContext({ hasTouch: ["popup-actions", "sidebar-controls"].includes(name) });
+    args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+  console.log(`Browser ${browser.version()}, mode ${mode}`);
+  for (const mapbox of [false, true]) {
+    const group = selected.filter(s => !!s.mapbox === mapbox);
+    if (!group.length) continue;
+    // Override at Vite configuration level. Smoke never inherits a private token
+    // or an external API URL from the root .env; app sources stay unmodified.
+    server = await createServer({ root, logLevel: "error",
+      define: { ...(!mapbox && { "import.meta.env.VITE_MAPBOX_TOKEN": '""' }), "import.meta.env.VITE_API_BASE_URL": '""' },
+      server: { host: "localhost", port: 5188, strictPort: true } });
     try {
-      console.log(name, JSON.stringify(await verify(await context.newPage(), "http://localhost:5188", ["loading", "map-navigation", "sidebar-controls", "sidebar-rail", "reset", "mobile-responsive", "mobile-navigation", "toast", "coordinate-picker", "marker-colors", "sidebar-polish", "popup-actions"].includes(name) ? process.env.BROWSER_SCREENSHOT_DIR : undefined)));
-    } catch (error) {
-      if (process.env.BROWSER_SCREENSHOT_DIR) {
-        const page = context.pages()[0];
-        await page?.screenshot({ path: `${process.env.BROWSER_SCREENSHOT_DIR}/failure-${name}.png` });
-        console.log("failure state", await page?.evaluate(() => ({focus: document.activeElement?.outerHTML.slice(0,200), dialog: document.querySelector("dialog")?.open, hidden: document.getElementById("world-map")?.hidden})));
+      if (mapbox && !server.config.env.VITE_MAPBOX_TOKEN) throw new Error("Full map suites require VITE_MAPBOX_TOKEN in the environment or root .env");
+      await server.listen();
+      for (const suite of group) {
+        console.log(`${suite.name} START`);
+        const start = performance.now(), errors = [], external = [];
+        context = await browser.newContext({ viewport: { width: 1440, height: 900 }, hasTouch: true });
+        const page = await context.newPage();
+        page.setDefaultTimeout(15_000); page.setDefaultNavigationTimeout(30_000);
+        page.on("pageerror", error => errors.push(error.message));
+        if (!mapbox) await context.route("**/*", route => {
+          if (new URL(route.request().url()).origin === baseURL) return route.continue();
+          external.push(new URL(route.request().url()).origin);
+          return route.abort("blockedbyclient");
+        });
+        let timeout;
+        try {
+          const result = await Promise.race([
+            suite.verify(page, baseURL, process.env.BROWSER_SCREENSHOT_DIR),
+            new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error(`${suite.name} exceeded ${mapbox ? 120 : 60}s`)), mapbox ? 120_000 : 60_000); }),
+          ]);
+          assert.deepEqual(errors, [], "No uncaught browser errors");
+          assert.deepEqual(external, [], "Token-free suites must not request external services");
+          console.log(`${suite.name} PASS ${((performance.now() - start) / 1000).toFixed(1)}s`, JSON.stringify(result));
+        } catch (error) {
+          // Do not log token-bearing request URLs, HARs or served bundles.
+          console.error(`${suite.name} FAIL`, error);
+          failures.push(error);
+          if (process.env.BROWSER_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.BROWSER_SCREENSHOT_DIR}/failure-${suite.name}.png`, timeout: 5000 }).catch(() => {});
+        } finally { clearTimeout(timeout); await context.close(); context = undefined; }
       }
-      console.error(name, error);
-      failures.push(error);
-    } finally { await context.close(); }
+    } finally { await server.close(); server = undefined; }
   }
   if (failures.length) throw new AggregateError(failures, "Browser suites failed");
 } finally {
-  try { await browser?.close(); }
-  finally { await server.close(); }
+  try { await cleanup(); } finally { clearTimeout(deadline); }
 }

@@ -48,3 +48,9 @@ jobs:
       - name: Frontend Vite branding integration
         run: npm run test:branding -w frontend
         timeout-minutes: 3
+      - name: Install pinned Playwright Chromium
+        run: npx --no-install playwright install --with-deps chromium
+        timeout-minutes: 3
+      - name: Frontend browser smoke (fixture API, no Mapbox token)
+        run: npm run test:browser:smoke -w frontend
+        timeout-minutes: 2

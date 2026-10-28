@@ -16,7 +16,7 @@ if (api.protocol !== "http:" || !["localhost", "127.0.0.1"].includes(api.hostnam
 const apiURL = api.origin, webURL = "http://localhost:5190";
 assert.notEqual(apiURL, webURL, "Production smoke requires two different origins");
 assert.equal((await fetch(`${apiURL}/health`)).status, 200);
-const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ?? "playwright");
+const { chromium } = await import("playwright");
 const scratch = await mkdtemp(join(tmpdir(), "capital-deployment-"));
 const root = fileURLToPath(new URL("..", import.meta.url));
 let browser, server;
